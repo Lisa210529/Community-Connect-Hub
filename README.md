@@ -1,5 +1,7 @@
 # Community Connect Hub
 
+Community Connect Hub: A Digital Governance & Councilor Performance Tracking System for Madang Province — IS406 Final Year Project.
+
 Web-based ward development and community engagement platform built with **React**, **Vite**, and **Firebase**.
 
 ## Tech Stack
