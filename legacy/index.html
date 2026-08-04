@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Community Connect Hub</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #7c3aed;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #0f172a;
+            --gray-500: #64748b;
+            --gray-100: #f1f5f9;
+            --white: #ffffff;
+            --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            --radius-xl: 28px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 440px;
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: var(--white);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            padding: 48px 40px;
+            animation: fadeInUp 0.6s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .auth-logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .auth-logo h1 {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .auth-logo p {
+            color: var(--gray-500);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .auth-logo .badge-container {
+            margin-top: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            font-weight: 500;
+            font-size: 14px;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+
+        .form-group label i {
+            margin-right: 8px;
+            color: var(--gray-500);
+        }
+
+        .form-control {
+            border-radius: 12px;
+            padding: 12px 16px;
+            border: 1px solid #e2e8f0;
+            font-size: 15px;
+            transition: 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-control.is-valid {
+            border-color: var(--success);
+        }
+
+        .form-control.is-invalid {
+            border-color: var(--danger);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            transition: 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            margin: 24px 0;
+            color: var(--gray-500);
+            font-size: 13px;
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e2e8f0;
+        }
+
+        .auth-divider::before {
+            margin-right: 16px;
+        }
+        .auth-divider::after {
+            margin-left: 16px;
+        }
+
+        .auth-footer {
+            text-align: center;
+            font-size: 14px;
+            color: var(--gray-500);
+            margin-top: 20px;
+        }
+
+        .auth-footer a {
+            font-weight: 600;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .nid-feedback {
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .nid-feedback.valid {
+            color: var(--success);
+        }
+
+        .nid-feedback.invalid {
+            color: var(--danger);
+        }
+
+        .nid-feedback.info {
+            color: var(--gray-500);
+        }
+
+        .app-wrapper {
+            display: none;
+            width: 100%;
+            min-height: 100vh;
+            background: #f8fafc;
+        }
+
+        .app-wrapper.active {
+            display: block;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: var(--dark);
+            color: var(--white);
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            z-index: 1000;
+            transition: 0.3s;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .sidebar-brand {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-brand h4 {
+            font-weight: 700;
+            font-size: 18px;
+            margin: 0;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .sidebar-nav {
+            padding: 16px 12px;
+        }
+
+        .sidebar-nav .nav-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.3);
+            padding: 8px 12px;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .sidebar-nav .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            transition: 0.3s;
+            cursor: pointer;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+
+        .sidebar-nav .nav-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--white);
+        }
+
+        .sidebar-nav .nav-item.active {
+            background: rgba(37, 99, 235, 0.2);
+            color: var(--white);
+        }
+
+        .sidebar-nav .nav-item i {
+            width: 20px;
+            text-align: center;
+        }
+
+        .sidebar-nav .nav-item .badge {
+            margin-left: auto;
+            background: var(--danger);
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
+
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .sidebar-footer .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-footer .user-info .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--white);
+        }
+
+        .sidebar-footer .user-info .user-details .name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--white);
+        }
+
+        .sidebar-footer .user-info .user-details .role {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .sidebar-footer .user-info .user-details .ward {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .sidebar-footer .user-info .user-details .nid {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            padding: 24px 32px;
+            min-height: 100vh;
+        }
+
+        .top-navbar {
+            background: var(--white);
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .top-navbar .page-title h4 {
+            font-weight: 700;
+            margin: 0;
+            color: var(--dark);
+        }
+
+        .top-navbar .page-title p {
+            margin: 0;
+            color: var(--gray-500);
+            font-size: 14px;
+        }
+
+        .top-navbar .navbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .top-navbar .navbar-actions .btn-logout {
+            padding: 8px 20px;
+            border-radius: 30px;
+            border: none;
+            background: #f1f5f9;
+            color: #1e293b;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+
+        .top-navbar .navbar-actions .btn-logout:hover {
+            background: #fee2e2;
+            color: var(--danger);
+        }
+
+        .dashboard-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--white);
+            padding: 20px 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            border-left: 4px solid var(--primary);
+            transition: 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card .stat-label {
+            font-size: 13px;
+            color: var(--gray-500);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--dark);
+            margin: 4px 0;
+        }
+
+        .stat-card .stat-icon {
+            float: right;
+            font-size: 28px;
+            color: #60a5fa;
+            opacity: 0.5;
+        }
+
+        .stat-card.border-success {
+            border-left-color: var(--success);
+        }
+        .stat-card.border-success .stat-icon {
+            color: var(--success);
+        }
+        .stat-card.border-warning {
+            border-left-color: var(--warning);
+        }
+        .stat-card.border-warning .stat-icon {
+            color: var(--warning);
+        }
+        .stat-card.border-danger {
+            border-left-color: var(--danger);
+        }
+        .stat-card.border-danger .stat-icon {
+            color: var(--danger);
+        }
+
+        .card-custom {
+            background: var(--white);
+            border-radius: 12px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            border: none;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .card-custom .card-header {
+            padding: 16px 24px;
+            background: transparent;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .card-custom .card-body {
+            padding: 24px;
+        }
+
+        .badge-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-status.badge-pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .badge-status.badge-approved {
+            background: #d1fae5;
+            color: #059669;
+        }
+        .badge-status.badge-completed {
+            background: #d1fae5;
+            color: #059669;
+        }
+        .badge-status.badge-in-progress {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+        .badge-status.badge-rejected {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .star-rating-input .star-btn {
+            background: none;
+            border: none;
+            padding: 2px 4px;
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+
+        .star-rating-input .star-btn:focus {
+            outline: none;
+        }
+
+        .resident-ward-banner {
+            background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+            border-left: 4px solid var(--primary-color, #2563eb);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+        }
+
+        .process-tracker {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin: 16px 0;
+        }
+
+        .process-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 0;
+            position: relative;
+        }
+
+        .process-step:not(:last-child)::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 36px;
+            bottom: -2px;
+            width: 2px;
+            background: #e2e8f0;
+        }
+
+        .process-step.complete:not(:last-child)::before {
+            background: #059669;
+        }
+
+        .process-step-marker {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+            z-index: 1;
+        }
+
+        .process-step.complete .process-step-marker {
+            background: #059669;
+            color: #fff;
+        }
+
+        .process-step.active .process-step-marker {
+            background: #2563eb;
+            color: #fff;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+        }
+
+        .process-step-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #1e293b;
+        }
+
+        .process-step-actor {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .process-step.active .process-step-title {
+            color: #2563eb;
+        }
+
+        .process-alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .process-alert-danger {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .process-alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+
+        .swimlane-legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .swimlane-chip {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 11px;
+            text-align: center;
+            color: #475569;
+        }
+
+        .swimlane-chip strong {
+            display: block;
+            color: #1e293b;
+            font-size: 12px;
+        }
+
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .page-section {
+            display: none;
+        }
+
+        .page-section.active {
+            display: block;
+        }
+
+        .sidebar-toggle {
+            display: none;
+            background: var(--white);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 20px;
+            color: #1e293b;
+            cursor: pointer;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        .stars {
+            color: #f59e0b;
+            font-size: 14px;
+            letter-spacing: 2px;
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 280px;
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 16px;
+            }
+            .sidebar-toggle {
+                display: block !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .top-navbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .top-navbar .navbar-actions {
+                flex-wrap: wrap;
+            }
+            .auth-card {
+                padding: 32px 24px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .dashboard-stats {
+                grid-template-columns: 1fr;
+            }
+            .auth-card .auth-logo h1 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- =============================================
+    PAGE 1: LOGIN
+    ============================================= -->
+    <div class="auth-container" id="page-login">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <h1><i class="fas fa-hub"></i> Community Connect Hub</h1>
+                <p>Digital Governance &amp; WDC Management System</p>
+                <div class="badge-container">
+                    <span class="badge bg-primary me-1">Ward 5</span>
+                    <span class="badge bg-secondary">Madang Urban LLG</span>
+                </div>
+            </div>
+
+            <form id="loginForm" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="loginEmail"><i class="fas fa-envelope"></i> Email</label>
+                    <input type="email" class="form-control" id="loginEmail"
+                           placeholder="Enter your registered email" required autocomplete="email" />
+                    <div class="form-text"><small>Sign in with the email and password you used when registering</small></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="loginPassword"><i class="fas fa-lock"></i> Password</label>
+                    <div class="input-group">
+                        <input type="password" class="form-control" id="loginPassword" 
+                               placeholder="Enter your password" required />
+                        <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="loginBtn">
+                    <i class="fas fa-sign-in-alt me-2"></i> Login
+                </button>
+
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="rememberMe">
+                        <label class="form-check-label" for="rememberMe">Remember me</label>
+                    </div>
+                    <a href="#" id="showForgotPasswordLink" class="text-primary text-decoration-none">
+                        <i class="fas fa-key me-1"></i> Forgot Password?
+                    </a>
+                </div>
+
+                <div class="auth-divider">or</div>
+
+                <div class="auth-footer">
+                    Don't have an account? <a href="#" id="showRegisterLink">Register now</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =============================================
+    PAGE 2: REGISTER WITH NID
+    ============================================= -->
+    <div class="auth-container" id="page-register" style="display:none;">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <h1><i class="fas fa-user-plus"></i> Create Account</h1>
+                <p>Join the Community Connect Hub</p>
+                <p class="small text-muted">NID verification required</p>
+            </div>
+
+            <form id="registerForm" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="regUserId"><i class="fas fa-id-card"></i> User ID</label>
+                    <input type="text" class="form-control" id="regUserId" 
+                           placeholder="Enter your User ID (e.g., 210529)" required />
+                    <div class="form-text"><small>Your User ID is your Student/Staff ID (6-10 digits)</small></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="regName"><i class="fas fa-user"></i> Full Name</label>
+                    <input type="text" class="form-control" id="regName" placeholder="Enter your full name" required />
+                </div>
+
+                <div class="form-group">
+                    <label for="regNID"><i class="fas fa-id-card"></i> National ID (NID) Number</label>
+                    <input type="text" class="form-control" id="regNID" 
+                           placeholder="Enter your 9-digit NID number" required maxlength="9" />
+                    <div id="nidValidationResult" class="nid-feedback"></div>
+                    <div class="form-text">
+                        <small>Your NID identifies you as a ward resident. Each NID can only be registered once to prevent duplicate accounts.</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="regEmail"><i class="fas fa-envelope"></i> Email Address</label>
+                    <input type="email" class="form-control" id="regEmail" placeholder="Enter your email" required />
+                </div>
+
+                <div class="form-group">
+                    <label for="regPassword"><i class="fas fa-lock"></i> Password</label>
+                    <div class="input-group">
+                        <input type="password" class="form-control" id="regPassword" placeholder="Create a password" required />
+                        <button class="btn btn-outline-secondary" type="button" id="toggleRegPassword">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div id="passwordValidationResult" class="nid-feedback"></div>
+                    <div class="form-text"><small id="passwordHelp">Use at least 8 characters with uppercase, lowercase, a number, and a special character.</small></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="regRole"><i class="fas fa-user-tag"></i> Role</label>
+                    <select class="form-select" id="regRole">
+                        <option value="resident">Resident</option>
+                    </select>
+                    <div class="form-text"><small>Other roles are assigned by an administrator after registration.</small></div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="registerBtn">
+                    <i class="fas fa-user-plus me-2"></i> Register
+                </button>
+
+                <div class="auth-footer mt-3">
+                    Already have an account? <a href="#" id="showLoginLink">Login here</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =============================================
+    PAGE 3: DASHBOARD
+    ============================================= -->
+    <div id="page-dashboard" style="display:none;">
+        <div class="app-wrapper active">
+            <!-- Sidebar -->
+            <nav class="sidebar" id="sidebar">
+                <div class="sidebar-brand">
+                    <i class="fas fa-hub text-primary" style="font-size:24px;"></i>
+                    <h4>Community Hub</h4>
+                </div>
+                <div class="sidebar-nav">
+                    <div class="nav-label" id="sidebarGuideLabel">User Guide</div>
+                    <button class="nav-item active" data-page="dashboard" data-roles="all">
+                        <i class="fas fa-th-large"></i> <span class="nav-text" data-nav-key="dashboard">Dashboard</span>
+                    </button>
+                    <button class="nav-item" data-page="requests" data-roles="resident,councillor,wdc_chairperson,wdc_secretary,wdc_member,dda_officer,llg_admin,provincial_admin">
+                        <i class="fas fa-file-alt"></i> <span class="nav-text" data-nav-key="requests">Requests</span>
+                    </button>
+                    <button class="nav-item" data-page="log-project" data-roles="councillor">
+                        <i class="fas fa-plus-circle"></i> <span class="nav-text" data-nav-key="log-project">Log Projects</span>
+                    </button>
+                    <button class="nav-item" data-page="projects" data-roles="resident,councillor,wdc_chairperson,wdc_secretary,wdc_member,llg_admin,dda_officer,provincial_admin,pec_member,psip_coordinator,dsip_coordinator,funding_agency,system_admin">
+                        <i class="fas fa-tasks"></i> <span class="nav-text" data-nav-key="projects">Projects</span>
+                    </button>
+                    <button class="nav-item" data-page="ratings" data-roles="resident">
+                        <i class="fas fa-star"></i> <span class="nav-text" data-nav-key="ratings">Ratings</span>
+                    </button>
+                    <button class="nav-item" data-page="scorecard" data-roles="councillor">
+                        <i class="fas fa-chart-line"></i> <span class="nav-text" data-nav-key="scorecard">Scorecard</span>
+                    </button>
+                    <button class="nav-item" data-page="complaints" data-roles="resident">
+                        <i class="fas fa-exclamation-triangle"></i> <span class="nav-text" data-nav-key="complaints">Complaints</span>
+                    </button>
+                    <button class="nav-item" data-page="announcements" data-roles="resident,wdc_chairperson,wdc_secretary,wdc_member,llg_admin,dda_officer,provincial_admin,pec_member,psip_coordinator,dsip_coordinator,funding_agency,system_admin">
+                        <i class="fas fa-bullhorn"></i> <span class="nav-text" data-nav-key="announcements">Announcements</span>
+                    </button>
+                    <button class="nav-item" data-page="announcements" data-roles="councillor">
+                        <i class="fas fa-bullhorn"></i> <span class="nav-text" data-nav-key="post-announcements">Post Announcements</span>
+                    </button>
+                    <button class="nav-item" data-page="wdc-management" data-roles="councillor,wdc_chairperson">
+                        <i class="fas fa-users-cog"></i> <span class="nav-text" data-nav-key="wdc-management">WDC Management</span>
+                    </button>
+                    <button class="nav-item" data-page="documents" data-roles="councillor">
+                        <i class="fas fa-file-pdf"></i> <span class="nav-text" data-nav-key="documents">Document Generation</span>
+                    </button>
+                    <button class="nav-item" data-page="community-needs" data-roles="wdc_chairperson,wdc_secretary,wdc_member">
+                        <i class="fas fa-clipboard-list"></i> <span class="nav-text" data-nav-key="community-needs">Community Needs</span>
+                    </button>
+                    <button class="nav-item" data-page="wdc-meetings" data-roles="wdc_chairperson,wdc_secretary,wdc_member,councillor">
+                        <i class="fas fa-handshake"></i> <span class="nav-text" data-nav-key="wdc-meetings">WDC Meetings</span>
+                    </button>
+                    <button class="nav-item" data-page="approve-projects" data-roles="dda_officer,provincial_admin">
+                        <i class="fas fa-check-double"></i> <span class="nav-text" data-nav-key="approve-projects">Approve Projects</span>
+                    </button>
+                    <button class="nav-item" data-page="reports" data-roles="dda_officer">
+                        <i class="fas fa-chart-bar"></i> <span class="nav-text" data-nav-key="reports">Reports</span>
+                    </button>
+                    <button class="nav-item" data-page="monitor-wards" data-roles="dda_officer,llg_admin,provincial_admin">
+                        <i class="fas fa-map-marked-alt"></i> <span class="nav-text" data-nav-key="monitor-wards">Monitor Wards</span>
+                    </button>
+                    <button class="nav-item" data-page="performance" data-roles="provincial_admin">
+                        <i class="fas fa-tachometer-alt"></i> <span class="nav-text" data-nav-key="performance">Performance</span>
+                    </button>
+                    <button class="nav-item" data-page="analytics" data-roles="provincial_admin">
+                        <i class="fas fa-chart-pie"></i> <span class="nav-text" data-nav-key="analytics">Analytics</span>
+                    </button>
+                    <button class="nav-item" data-page="users" data-roles="system_admin">
+                        <i class="fas fa-users"></i> <span class="nav-text" data-nav-key="users">User Management</span>
+                    </button>
+                    <button class="nav-item" data-page="account-approvals" data-roles="system_admin,provincial_admin">
+                        <i class="fas fa-user-check"></i> <span class="nav-text" data-nav-key="account-approvals">Account Approvals</span>
+                    </button>
+                    <button class="nav-item" data-page="system-config" data-roles="system_admin">
+                        <i class="fas fa-cogs"></i> <span class="nav-text" data-nav-key="system-config">System Configuration</span>
+                    </button>
+                    <button class="nav-item" data-page="mfa-security" data-roles="all">
+                        <i class="fas fa-shield-alt"></i> <span class="nav-text" data-nav-key="mfa-security">Security &amp; MFA</span>
+                    </button>
+                </div>
+                <div class="sidebar-footer">
+                    <div class="user-info">
+                        <div class="avatar" id="userAvatar">U</div>
+                        <div class="user-details">
+                            <div class="name" id="userName">User</div>
+                            <div class="role" id="userRole">Resident</div>
+                            <div class="ward" id="userWard">Ward: --</div>
+                            <div class="nid" id="userNID">NID: --</div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Top Navbar -->
+                <div class="top-navbar">
+                    <div>
+                        <button class="sidebar-toggle" id="sidebarToggle">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <div class="page-title d-inline-block ms-2">
+                            <h4 id="pageTitle">Dashboard</h4>
+                            <p id="pageSubtitle">Welcome back, <span id="greetingName">User</span>!</p>
+                        </div>
+                    </div>
+                    <div class="navbar-actions">
+                        <button class="btn-logout" id="logoutBtn">
+                            <i class="fas fa-sign-out-alt me-2"></i> Logout
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Dashboard Section -->
+                <div class="page-section" id="section-dashboard">
+                    <div id="residentWardBanner" class="resident-ward-banner" style="display:none;"></div>
+
+                    <div class="dashboard-stats">
+                        <div class="stat-card border-primary">
+                            <i class="stat-icon fas fa-project-diagram"></i>
+                            <div class="stat-label">Ward Projects</div>
+                            <div class="stat-value" id="totalProjects">0</div>
+                        </div>
+                        <div class="stat-card border-success">
+                            <i class="stat-icon fas fa-check-circle"></i>
+                            <div class="stat-label">Completed</div>
+                            <div class="stat-value" id="completedProjects">0</div>
+                        </div>
+                        <div class="stat-card border-warning">
+                            <i class="stat-icon fas fa-clock"></i>
+                            <div class="stat-label">In Progress</div>
+                            <div class="stat-value" id="inProgressProjects">0</div>
+                        </div>
+                        <div class="stat-card border-danger">
+                            <i class="stat-icon fas fa-star"></i>
+                            <div class="stat-label">Avg Rating</div>
+                            <div class="stat-value" id="avgRating">0.0</div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3" id="residentQuickStats">
+                        <div class="col-md-6">
+                            <div class="card-custom h-100">
+                                <div class="card-body d-flex align-items-center">
+                                    <i class="fas fa-inbox fa-2x text-primary me-3"></i>
+                                    <div>
+                                        <div class="text-muted small">My Service Requests</div>
+                                        <div class="fs-4 fw-bold" id="residentRequestsCount">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card-custom h-100">
+                                <div class="card-body d-flex align-items-center">
+                                    <i class="fas fa-exclamation-circle fa-2x text-danger me-3"></i>
+                                    <div>
+                                        <div class="text-muted small">Open Complaints</div>
+                                        <div class="fs-4 fw-bold" id="residentComplaintsCount">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-custom">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-th-large me-2 text-primary"></i> 4.1 Dashboard Overview — Recent Projects</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary nav-item" data-page="projects">
+                                <i class="fas fa-list me-1"></i> View All
+                            </button>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>Category</th>
+                                            <th>Budget</th>
+                                            <th>Status</th>
+                                            <th>Rating</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="projectsTableBody">
+                                        <tr>
+                                            <td colspan="6" class="text-center py-3 text-muted">
+                                                <i class="fas fa-inbox fa-2x d-block mb-2"></i>
+                                                No projects yet. Stay tuned!
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Councillor Dashboard (5.1) -->
+                <div class="page-section" id="section-dashboard-councillor">
+                    <div class="dashboard-stats">
+                        <div class="stat-card border-primary">
+                            <i class="stat-icon fas fa-tasks"></i>
+                            <div class="stat-label">Logged Projects</div>
+                            <div class="stat-value" id="councillorLoggedProjects">0</div>
+                        </div>
+                        <div class="stat-card border-warning">
+                            <i class="stat-icon fas fa-inbox"></i>
+                            <div class="stat-label">Pending Requests</div>
+                            <div class="stat-value" id="councillorPendingRequests">0</div>
+                        </div>
+                        <div class="stat-card border-success">
+                            <i class="stat-icon fas fa-users-cog"></i>
+                            <div class="stat-label">WDC Status</div>
+                            <div class="stat-value" style="font-size:18px;">Active</div>
+                        </div>
+                        <div class="stat-card border-danger">
+                            <i class="stat-icon fas fa-chart-line"></i>
+                            <div class="stat-label">Ward Scorecard</div>
+                            <div class="stat-value" id="councillorScorecard">—</div>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-th-large me-2 text-primary"></i> 5.1 Dashboard Overview
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <p class="text-muted mb-0">Log projects, manage resident requests, maintain WDC, and post ward announcements from the sidebar.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WDC Dashboard Section -->
+                <div class="page-section" id="section-dashboard-wdc">
+                    <div class="dashboard-stats">
+                        <div class="stat-card border-primary">
+                            <i class="stat-icon fas fa-users"></i>
+                            <div class="stat-label">WDC Status</div>
+                            <div class="stat-value" style="font-size:18px;">Active</div>
+                        </div>
+                        <div class="stat-card border-warning">
+                            <i class="stat-icon fas fa-clock"></i>
+                            <div class="stat-label">Pending Review</div>
+                            <div class="stat-value" id="wdcPendingCount">0</div>
+                        </div>
+                        <div class="stat-card border-success">
+                            <i class="stat-icon fas fa-check-circle"></i>
+                            <div class="stat-label">Approved Projects</div>
+                            <div class="stat-value" id="wdcApprovedCount">0</div>
+                        </div>
+                        <div class="stat-card border-danger">
+                            <i class="stat-icon fas fa-calendar"></i>
+                            <div class="stat-label">Meetings</div>
+                            <div class="stat-value" id="wdcMeetingsCount">0</div>
+                        </div>
+                    </div>
+                    <div class="card-custom mb-3">
+                        <div class="card-header">
+                            <i class="fas fa-th-large me-2 text-primary"></i> 10. Ward Development Committee — Dashboard
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <p class="text-muted mb-0">Review requests, record community needs, and schedule WDC meetings with your councillor.</p>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-gavel me-2 text-primary"></i> 10.1 Review Request — WDC Review Queue
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <p class="text-muted mb-0">Projects awaiting WDC review will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mayor Dashboard (6.1 — DDA Officer / LLG Admin) -->
+                <div class="page-section" id="section-dashboard-mayor">
+                    <div class="dashboard-stats">
+                        <div class="stat-card border-primary">
+                            <i class="stat-icon fas fa-check-double"></i>
+                            <div class="stat-label">Awaiting Approval</div>
+                            <div class="stat-value" id="mayorPendingApproval">0</div>
+                        </div>
+                        <div class="stat-card border-warning">
+                            <i class="stat-icon fas fa-map-marked-alt"></i>
+                            <div class="stat-label">Wards Monitored</div>
+                            <div class="stat-value" id="mayorWardsCount">0</div>
+                        </div>
+                        <div class="stat-card border-success">
+                            <i class="stat-icon fas fa-file-alt"></i>
+                            <div class="stat-label">Reports Generated</div>
+                            <div class="stat-value" id="mayorReportsCount">0</div>
+                        </div>
+                        <div class="stat-card border-danger">
+                            <i class="stat-icon fas fa-users-cog"></i>
+                            <div class="stat-label">Wards Without WDC</div>
+                            <div class="stat-value" id="mayorNoWdcCount">0</div>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-th-large me-2 text-primary"></i> 6.1 Dashboard Overview
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <p class="text-muted mb-0">Approve projects, generate reports, and monitor ward performance across Madang Urban LLG.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Provincial Admin Dashboard (7.1) -->
+                <div class="page-section" id="section-dashboard-provincial">
+                    <div class="dashboard-stats">
+                        <div class="stat-card border-primary">
+                            <i class="stat-icon fas fa-user-check"></i>
+                            <div class="stat-label">Pending Approvals</div>
+                            <div class="stat-value" id="provincialPendingUsers">0</div>
+                        </div>
+                        <div class="stat-card border-warning">
+                            <i class="stat-icon fas fa-map-marker-alt"></i>
+                            <div class="stat-label">Wards Without WDC</div>
+                            <div class="stat-value" id="provincialNoWdcCount">0</div>
+                        </div>
+                        <div class="stat-card border-success">
+                            <i class="stat-icon fas fa-project-diagram"></i>
+                            <div class="stat-label">Provincial Review</div>
+                            <div class="stat-value" id="provincialReviewCount">0</div>
+                        </div>
+                        <div class="stat-card border-danger">
+                            <i class="stat-icon fas fa-chart-pie"></i>
+                            <div class="stat-label">Performance Index</div>
+                            <div class="stat-value" style="font-size:18px;">—</div>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-th-large me-2 text-primary"></i> 7.1 Dashboard Overview
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <p class="text-muted mb-0">Approve projects, monitor performance, and run provincial analytics and reporting.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Admin Dashboard (8.1) -->
+                <div class="page-section" id="section-dashboard-system">
+                    <div class="dashboard-stats">
+                        <div class="stat-card border-primary">
+                            <i class="stat-icon fas fa-users"></i>
+                            <div class="stat-label">Total Users</div>
+                            <div class="stat-value" id="systemTotalUsers">0</div>
+                        </div>
+                        <div class="stat-card border-warning">
+                            <i class="stat-icon fas fa-user-clock"></i>
+                            <div class="stat-label">Pending Accounts</div>
+                            <div class="stat-value" id="systemPendingAccounts">0</div>
+                        </div>
+                        <div class="stat-card border-success">
+                            <i class="stat-icon fas fa-cogs"></i>
+                            <div class="stat-label">System Status</div>
+                            <div class="stat-value" style="font-size:18px;">OK</div>
+                        </div>
+                        <div class="stat-card border-danger">
+                            <i class="stat-icon fas fa-shield-alt"></i>
+                            <div class="stat-label">Security</div>
+                            <div class="stat-value" style="font-size:18px;">Active</div>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-th-large me-2 text-primary"></i> 8.1 User Management Overview
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <p class="text-muted mb-0">Manage users, approve accounts, and configure system settings.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Legacy admin dashboard (hidden — kept for compatibility) -->
+                <div class="page-section" id="section-dashboard-admin" style="display:none;">
+                    <div class="dashboard-stats">
+                        <div class="stat-card border-primary">
+                            <i class="stat-icon fas fa-user-check"></i>
+                            <div class="stat-label">Pending Approvals</div>
+                            <div class="stat-value" id="adminPendingUsers">0</div>
+                        </div>
+                        <div class="stat-card border-warning">
+                            <i class="stat-icon fas fa-map-marker-alt"></i>
+                            <div class="stat-label">Wards Without WDC</div>
+                            <div class="stat-value" id="adminNoWdcCount">0</div>
+                        </div>
+                        <div class="stat-card border-success">
+                            <i class="stat-icon fas fa-project-diagram"></i>
+                            <div class="stat-label">Provincial Review</div>
+                            <div class="stat-value" id="adminProvincialReview">0</div>
+                        </div>
+                        <div class="stat-card border-danger">
+                            <i class="stat-icon fas fa-shield-alt"></i>
+                            <div class="stat-label">System Health</div>
+                            <div class="stat-value" style="font-size:18px;">OK</div>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-user-cog me-2 text-primary"></i> Account &amp; Ward Administration
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <p class="text-muted mb-0">Approve user accounts and manage wards.wdcExists from here.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Funding Dashboard Section -->
+                <div class="page-section" id="section-dashboard-funding">
+                    <div class="dashboard-stats">
+                        <div class="stat-card border-primary">
+                            <i class="stat-icon fas fa-money-bill-wave"></i>
+                            <div class="stat-label">PSIP Pipeline</div>
+                            <div class="stat-value" id="fundingPsipCount">0</div>
+                        </div>
+                        <div class="stat-card border-success">
+                            <i class="stat-icon fas fa-hand-holding-usd"></i>
+                            <div class="stat-label">DSIP Pipeline</div>
+                            <div class="stat-value" id="fundingDsipCount">0</div>
+                        </div>
+                        <div class="stat-card border-warning">
+                            <i class="stat-icon fas fa-ban"></i>
+                            <div class="stat-label">Blocked (No WDC)</div>
+                            <div class="stat-value" id="fundingBlockedCount">0</div>
+                        </div>
+                        <div class="stat-card border-danger">
+                            <i class="stat-icon fas fa-check-double"></i>
+                            <div class="stat-label">Funded</div>
+                            <div class="stat-value" id="fundingFundedCount">0</div>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-university me-2 text-primary"></i> Funding Coordination
+                        </div>
+                        <div class="card-body text-center py-4">
+                            <p class="text-muted mb-0">No WDC = No Government Funding — wards without wdcExists cannot receive PSIP/DSIP.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Projects Section -->
+                <div class="page-section" id="section-projects">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-tasks me-2 text-primary"></i> <span id="projectsSectionTitle">4.3 Viewing Projects</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-3" id="projectsSectionHint">
+                                Browse ward projects, view details, and rate completed work.
+                            </p>
+                            <div class="table-responsive">
+                                <table class="table table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>Category</th>
+                                            <th>Budget</th>
+                                            <th>Status</th>
+                                            <th>Rating</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="allProjectsTableBody">
+                                        <tr>
+                                            <td colspan="6" class="text-center py-3 text-muted">
+                                                <i class="fas fa-inbox fa-2x d-block mb-2"></i>
+                                                No projects available.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ratings Section -->
+                <div class="page-section" id="section-ratings">
+                    <div class="card-custom mb-3">
+                        <div class="card-header">
+                            <i class="fas fa-star me-2 text-primary"></i> 4.4 Rate a Project
+                        </div>
+                        <div class="card-body" id="ratingsFormContainer">
+                            <p class="text-muted mb-0"><i class="fas fa-spinner fa-spin me-1"></i> Loading rateable projects...</p>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-history me-2 text-primary"></i> My Ratings
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Project</th>
+                                            <th>Overall Score</th>
+                                            <th>Visibility</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="myRatingsTableBody">
+                                        <tr>
+                                            <td colspan="3" class="text-center py-3 text-muted">No ratings yet.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Announcements Section -->
+                <div class="page-section" id="section-announcements">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-bullhorn me-2 text-primary"></i> <span id="announcementsSectionTitle">4.6 Viewing Announcements</span>
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-bullhorn fa-3x text-primary mb-3"></i>
+                            <h5>Stay Informed</h5>
+                            <p class="text-muted">Check here for announcements from your councilor.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WDC Management Section (councillor + wdc_chairperson only) -->
+                <div class="page-section" id="section-wdc-management">
+                    <div class="card-custom mb-3">
+                        <div class="card-header">
+                            <i class="fas fa-users-cog me-2 text-primary"></i> 5.4 WDC Management — <span id="wdcWardLabel">Ward —</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-4">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <strong>No WDC = No Government Funding.</strong> Establish a Ward Development Committee to unlock PSIP/DSIP and provincial funding for this ward.
+                            </p>
+
+                            <!-- Create WDC form (shown when wards.wdcExists is false) -->
+                            <div id="wdcCreatePanel" style="display:none;">
+                                <h5 class="mb-3"><i class="fas fa-plus-circle me-2 text-success"></i> Establish WDC</h5>
+
+                                <div class="form-group mb-3">
+                                    <label for="wdcChairpersonSelect"><i class="fas fa-user-tie"></i> WDC Chairperson</label>
+                                    <select class="form-select" id="wdcChairpersonSelect">
+                                        <option value="">— Select WDC Chairperson —</option>
+                                    </select>
+                                    <div class="form-text"><small>Approved councillors or WDC chairpersons in this ward</small></div>
+                                </div>
+
+                                <div class="form-group mb-3">
+                                    <label><i class="fas fa-users"></i> Initial WDC Members</label>
+                                    <div id="wdcMemberRows"></div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="addWdcMemberRowBtn">
+                                        <i class="fas fa-plus me-1"></i> Add Member
+                                    </button>
+                                    <div class="form-text"><small>Enter User ID — name is looked up from the users collection. Chairperson is added automatically as Chairman.</small></div>
+                                </div>
+
+                                <button type="button" class="btn btn-primary" id="createWdcBtn">
+                                    <i class="fas fa-users me-2"></i> Establish WDC
+                                </button>
+                            </div>
+
+                            <!-- WDC Members list (shown when wards.wdcExists is true) -->
+                            <div id="wdcMembersPanel" style="display:none;">
+                                <h5 class="mb-3"><i class="fas fa-list me-2 text-primary"></i> WDC Members</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-striped mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Position</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="wdcMembersTableBody">
+                                            <tr>
+                                                <td colspan="3" class="text-center py-3 text-muted">Loading members...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Requests — 4.2 / 5.3 / 10.1 -->
+                <div class="page-section" id="section-requests">
+                    <!-- Resident: process overview -->
+                    <div class="card-custom mb-3" id="requestProcessOverviewPanel">
+                        <div class="card-header">
+                            <i class="fas fa-project-diagram me-2 text-primary"></i> Service Request &amp; Funding Process
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-2">
+                                Your request moves through WDC → Councillor → Mayor → Provincial Government.
+                                <strong>No WDC = No Government Funding</strong> for DSIP/PSIP projects.
+                            </p>
+                            <div class="swimlane-legend">
+                                <div class="swimlane-chip"><strong>Resident</strong>Identify need &amp; submit</div>
+                                <div class="swimlane-chip"><strong>WDC</strong>Review &amp; record needs</div>
+                                <div class="swimlane-chip"><strong>Councillor</strong>Finalize proposal</div>
+                                <div class="swimlane-chip"><strong>Mayor</strong>Assembly &amp; sign</div>
+                                <div class="swimlane-chip"><strong>Provincial</strong>Fund DSIP/PSIP</div>
+                                <div class="swimlane-chip"><strong>System</strong>Track status</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resident: submit form -->
+                    <div class="card-custom mb-3" id="residentRequestFormPanel">
+                        <div class="card-header">
+                            <i class="fas fa-plus-circle me-2 text-primary"></i> <span id="requestsSectionTitle">4.2 Request Project — Management Request</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-3" id="requestsSectionDesc">
+                                Identify a community need and submit a project, letter, or reference request.
+                            </p>
+                            <form id="residentRequestForm">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="reqRequestType">Request Type</label>
+                                        <select class="form-select" id="reqRequestType" required>
+                                            <option value="project">Project Request</option>
+                                            <option value="letter">Letter Request</option>
+                                            <option value="reference">Reference Request</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="reqCategory">Category</label>
+                                        <select class="form-select" id="reqCategory">
+                                            <option value="Infrastructure">Infrastructure</option>
+                                            <option value="Health">Health</option>
+                                            <option value="Education">Education</option>
+                                            <option value="Water &amp; Sanitation">Water &amp; Sanitation</option>
+                                            <option value="Community Services">Community Services</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="reqTitle">Request Title</label>
+                                        <input type="text" class="form-control" id="reqTitle" placeholder="e.g. Nabasa footbridge repair" required />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="reqCommunityNeed">Identify Community Need</label>
+                                        <textarea class="form-control" id="reqCommunityNeed" rows="3"
+                                            placeholder="Describe the community need and why this request is important..." required></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-primary" id="submitRequestBtn">
+                                            <i class="fas fa-paper-plane me-2"></i> Submit Request
+                                        </button>
+                                        <small class="text-muted ms-2">Status will be set to <strong>Pending WDC</strong></small>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- All roles: request queue -->
+                    <div class="card-custom">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-list me-2 text-primary"></i> <span id="requestsQueueTitle">My Requests</span></span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="refreshRequestsBtn">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Request</th>
+                                            <th>Category</th>
+                                            <th>Status</th>
+                                            <th>Submitted</th>
+                                            <th>Community Need</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="requestsTableBody">
+                                        <tr>
+                                            <td colspan="6" class="text-center py-4 text-muted">Open this page to load requests.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log Projects — 5.2 -->
+                <div class="page-section" id="section-log-project">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-plus-circle me-2 text-primary"></i> 5.2 Logging Projects
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-plus-circle fa-3x text-success mb-3"></i>
+                            <h5>Log a New Ward Project</h5>
+                            <p class="text-muted">Record community projects for tracking, funding, and resident visibility.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scorecard — 5.7 -->
+                <div class="page-section" id="section-scorecard">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-chart-line me-2 text-primary"></i> 5.7 Viewing Scorecard
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
+                            <h5>Ward Performance Scorecard</h5>
+                            <p class="text-muted">View ratings, project completion, and community feedback for your ward.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document Generation — 5.5 -->
+                <div class="page-section" id="section-documents">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-file-pdf me-2 text-primary"></i> 5.5 Document Generation
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-file-pdf fa-3x text-danger mb-3"></i>
+                            <h5>Generate Official Documents</h5>
+                            <p class="text-muted">Create letters, references, and project documentation for residents.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Community Needs — 10.2 -->
+                <div class="page-section" id="section-community-needs">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-clipboard-list me-2 text-primary"></i> 10.2 Record Community Needs
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-clipboard-list fa-3x text-warning mb-3"></i>
+                            <h5>Community Needs Register</h5>
+                            <p class="text-muted">Document ward priorities and community needs for WDC planning.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WDC Meetings — 10.3 -->
+                <div class="page-section" id="section-wdc-meetings">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-handshake me-2 text-primary"></i> 10.3 WDC Meeting with Councillor
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-handshake fa-3x text-success mb-3"></i>
+                            <h5>WDC Meeting Schedule &amp; Minutes</h5>
+                            <p class="text-muted">Schedule and record WDC meetings with the ward councillor.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Approve Projects — 6.2 / 7.2 -->
+                <div class="page-section" id="section-approve-projects">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-check-double me-2 text-primary"></i> <span id="approveProjectsTitle">Approving Projects</span>
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-check-double fa-3x text-success mb-3"></i>
+                            <h5 id="approveProjectsHeading">Project Approval Queue</h5>
+                            <p class="text-muted" id="approveProjectsDesc">Review and approve ward projects for funding and implementation.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports — 6.3 -->
+                <div class="page-section" id="section-reports">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-chart-bar me-2 text-primary"></i> 6.3 Generating Reports
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-chart-bar fa-3x text-primary mb-3"></i>
+                            <h5>Generate Ward &amp; LLG Reports</h5>
+                            <p class="text-muted">Produce summary reports on projects, WDC status, and funding.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monitor Wards — 6.4 / 7.3 -->
+                <div class="page-section" id="section-monitor-wards">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-map-marked-alt me-2 text-primary"></i> <span id="monitorWardsTitle">Monitoring Wards</span>
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-map-marked-alt fa-3x text-info mb-3"></i>
+                            <h5 id="monitorWardsHeading">Ward Monitoring</h5>
+                            <p class="text-muted" id="monitorWardsDesc">Track WDC establishment, project progress, and ward performance.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance — 7.3 -->
+                <div class="page-section" id="section-performance">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-tachometer-alt me-2 text-primary"></i> 7.3 Performance Monitoring
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-tachometer-alt fa-3x text-warning mb-3"></i>
+                            <h5>Provincial Performance Monitoring</h5>
+                            <p class="text-muted">Monitor councillor, WDC, and project performance across the province.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics — 7.4 -->
+                <div class="page-section" id="section-analytics">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-chart-pie me-2 text-primary"></i> 7.4 Analytics &amp; Reporting
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-chart-pie fa-3x text-danger mb-3"></i>
+                            <h5>Provincial Analytics Dashboard</h5>
+                            <p class="text-muted">Analyse trends in projects, funding, complaints, and ward development.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Management — 8.1 -->
+                <div class="page-section" id="section-users">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-users me-2 text-primary"></i> 8.1 User Management
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                            <h5>Manage System Users</h5>
+                            <p class="text-muted">Create, edit, deactivate, and assign roles to user accounts.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Approvals — 8.2 / 2.3 -->
+                <div class="page-section" id="section-account-approvals">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-user-check me-2 text-primary"></i> 8.2 Account Approvals
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-user-check fa-3x text-success mb-3"></i>
+                            <h5>Pending Account Approvals</h5>
+                            <p class="text-muted">Review NID-verified registrations and approve or reject new accounts.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Configuration — 8.3 -->
+                <div class="page-section" id="section-system-config">
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-cogs me-2 text-primary"></i> 8.3 System Configuration
+                        </div>
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-cogs fa-3x text-secondary mb-3"></i>
+                            <h5>System Settings</h5>
+                            <p class="text-muted">Configure wards, roles, notification settings, and system parameters.</p>
+                            <p class="text-muted">Coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MFA Security — 3.2 Multi-Factor Authentication -->
+                <div class="page-section" id="section-mfa-security">
+                    <div class="card-custom mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-shield-alt me-2 text-primary"></i> 3.2 Multi-Factor Authentication</span>
+                            <span id="mfaStatusBadge"></span>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small">Enroll SMS and/or authenticator app (TOTP) for an extra layer of security after login.</p>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <div class="p-3 border rounded">
+                                        <strong>SMS MFA:</strong> <span id="mfaSmsStatus">Not enrolled</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="p-3 border rounded">
+                                        <strong>TOTP (Authenticator):</strong> <span id="mfaTotpStatus">Not enrolled</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="mfaSmsEnrollForm" class="border rounded p-3 mb-3">
+                                <h6><i class="fas fa-sms me-2"></i> Enroll SMS Verification</h6>
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label" for="mfaEnrollPhone">Mobile Number</label>
+                                        <input type="tel" class="form-control" id="mfaEnrollPhone" placeholder="+67571234567" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label" for="mfaSmsEnrollCode">SMS Code</label>
+                                        <input type="text" class="form-control" id="mfaSmsEnrollCode" maxlength="6" placeholder="6 digits" />
+                                    </div>
+                                    <div class="col-md-5">
+                                        <button type="button" class="btn btn-outline-primary me-2" id="mfaSendSmsEnrollBtn">Send SMS Code</button>
+                                        <button type="button" class="btn btn-primary" id="mfaConfirmSmsEnrollBtn">Confirm SMS Enrollment</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="mfaTotpEnrollForm" class="border rounded p-3 mb-3">
+                                <h6><i class="fas fa-mobile-alt me-2"></i> Enroll Authenticator App (TOTP)</h6>
+                                <button type="button" class="btn btn-outline-primary mb-2" id="mfaStartTotpBtn">Generate QR Code</button>
+                                <div id="mfaTotpSetupPanel" style="display:none;">
+                                    <div class="row g-3">
+                                        <div class="col-md-4 text-center">
+                                            <canvas id="mfaTotpQrCanvas"></canvas>
+                                        </div>
+                                        <div class="col-md-8">
+                                            <p class="small text-muted">Scan with Google Authenticator, Microsoft Authenticator, or similar app.</p>
+                                            <p class="small"><strong>Manual key:</strong> <code id="mfaTotpSecretDisplay"></code></p>
+                                            <input type="hidden" id="mfaTotpPendingSecret" />
+                                            <label class="form-label" for="mfaTotpConfirmCode">Enter 6-digit code from app</label>
+                                            <div class="input-group" style="max-width:220px;">
+                                                <input type="text" class="form-control" id="mfaTotpConfirmCode" maxlength="6" placeholder="000000" />
+                                                <button type="button" class="btn btn-primary" id="mfaConfirmTotpEnrollBtn">Confirm</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="mfaDisablePanel" style="display:none;">
+                                <button type="button" class="btn btn-outline-danger" id="mfaDisableBtn">
+                                    <i class="fas fa-times me-1"></i> Disable MFA
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Complaints Section -->
+                <div class="page-section" id="section-complaints">
+                    <div class="card-custom mb-3">
+                        <div class="card-header">
+                            <i class="fas fa-exclamation-triangle me-2 text-primary"></i> 4.5 Submit a Complaint
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-3">Report issues with ward projects or council services. Your councillor will review pending complaints.</p>
+                            <form id="complaintForm">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="complaintSubject">Subject</label>
+                                        <input type="text" class="form-control" id="complaintSubject" required placeholder="Brief summary of the issue" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="complaintCategory">Category</label>
+                                        <select class="form-select" id="complaintCategory" required>
+                                            <option value="Project Quality">Project Quality</option>
+                                            <option value="Delay">Delay / Timeliness</option>
+                                            <option value="Communication">Communication</option>
+                                            <option value="Corruption">Corruption / Misuse</option>
+                                            <option value="General">General</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="complaintProjectSelect">Related Project (optional)</label>
+                                        <select class="form-select" id="complaintProjectSelect">
+                                            <option value="">— General complaint (no project) —</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label" for="complaintDescription">Description</label>
+                                        <textarea class="form-control" id="complaintDescription" rows="4" required placeholder="Describe the issue in detail..."></textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-primary" id="submitComplaintBtn">
+                                            <i class="fas fa-paper-plane me-2"></i> Submit Complaint
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card-custom">
+                        <div class="card-header">
+                            <i class="fas fa-list me-2 text-primary"></i> My Complaints
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Subject</th>
+                                            <th>Status</th>
+                                            <th>Description</th>
+                                            <th>Submitted</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="myComplaintsTableBody">
+                                        <tr>
+                                            <td colspan="4" class="text-center py-3 text-muted">No complaints submitted yet.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- =============================================
+    FORGOT PASSWORD MODAL
+    ============================================= -->
+    <div class="modal fade" id="forgotPasswordModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-key me-2"></i> Reset Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Enter your registered email and we'll send a password reset link.</p>
+                    <div class="form-group">
+                        <label for="resetEmail"><i class="fas fa-envelope"></i> Email</label>
+                        <input type="email" class="form-control" id="resetEmail" placeholder="Enter your registered email" autocomplete="email" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="resetPasswordBtn">
+                        <i class="fas fa-paper-plane me-2"></i> Send Reset Link
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request Detail Modal -->
+    <div class="modal fade" id="requestDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-route me-2"></i> <span id="requestDetailTitle">Request</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="requestDetailMeta" class="mb-3"></div>
+                    <h6 class="mb-2">Process Progress</h6>
+                    <div id="requestDetailTracker"></div>
+                    <hr>
+                    <h6 class="mb-2">Available Actions</h6>
+                    <div id="requestDetailActions"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Detail Modal -->
+    <div class="modal fade" id="projectDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-project-diagram me-2"></i> <span id="projectDetailTitle">Project</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="projectDetailBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="projectDetailRateBtn" style="display:none;">
+                        <i class="fas fa-star me-1"></i> Rate This Project
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MFA Verification Modal (login step 2) -->
+    <div class="modal fade" id="mfaVerifyModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-shield-alt me-2"></i> MFA Verification (3.2)</h5>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Enter a code from your enrolled SMS or authenticator app to complete login.</p>
+                    <div id="mfaVerifyMethods"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="mfaVerifyCancelBtn">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="mfaVerifySubmitBtn">Verify &amp; Continue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
+
+    <!-- =============================================
+    FIREBASE SDK - Load from CDN
+    ============================================= -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js">
+    </script>
+    <!-- Bootstrap 5 JS (required for Modal) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Application modules -->
+    <script src="https://cdn.jsdelivr.net/npm/otpauth@9.3.1/dist/otpauth.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/validation.js"></script>
+    <script src="js/crud.js"></script>
+    <script src="js/process-model.js"></script>
+    <script src="js/project-utils.js"></script>
+    <script src="js/mfa.js"></script>
+    <script src="js/requests.js"></script>
+    <script src="js/resident.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/auth.js"></script>
+
+</body>
+</html>

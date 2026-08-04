@@ -1,0 +1,58 @@
+---
+description: Community Connect Hub folder structure and file placement rules
+alwaysApply: true
+---
+
+# Project Structure Rules
+
+Before creating any file, determine the correct folder. Create missing folders automatically. Never add unrelated files to the project root.
+
+## Folder Map
+
+| Code type | Location |
+|-----------|----------|
+| React components (reusable) | `src/components/{common,layout,forms,ui}/` |
+| Page views | `src/pages/{PageName}/{PageName}.jsx` |
+| Firebase init & API | `src/services/` |
+| Custom hooks | `src/hooks/` |
+| React context | `src/context/` |
+| Routing | `src/routes/` |
+| Helpers | `src/utils/` |
+| App constants | `src/constants/` |
+| Env & config | `src/config/` |
+| Type definitions | `src/types/` |
+| CSS | `src/assets/styles/` |
+| Images | `src/assets/images/` |
+| Icons | `src/assets/icons/` |
+| Static assets | `public/` |
+| Firestore rules & schemas | `database/` |
+| Seed/cleanup scripts | `scripts/` |
+| Documentation | `docs/` |
+| Tests | `tests/` |
+| CI workflows | `.github/workflows/` |
+| Legacy vanilla app | `legacy/` (reference only) |
+
+## Examples
+
+```
+# ✅ New login form component
+src/components/forms/LoginForm.jsx
+
+# ✅ Resident requests feature
+src/pages/Resident/RequestsPanel.jsx
+
+# ✅ Firebase auth helper
+src/services/authService.js
+
+# ❌ Never do this
+./NewFeature.jsx
+./utils.js
+```
+
+## New Feature Workflow
+
+1. Identify the feature domain (auth, resident, wdc, admin, etc.)
+2. Create the page folder under `src/pages/` if it does not exist
+3. Extract reusable UI into `src/components/`
+4. Put Firebase calls in `src/services/`
+5. Wire routes in `src/routes/AppRoutes.jsx`

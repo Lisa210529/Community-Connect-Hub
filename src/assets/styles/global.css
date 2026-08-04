@@ -1,0 +1,76 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 100%);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.page-section.active {
+  display: block;
+}
+
+.nid-feedback {
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.nid-feedback.valid {
+  color: var(--success);
+}
+
+.nid-feedback.invalid {
+  color: var(--danger);
+}
+
+.nid-feedback.info {
+  color: var(--gray-500);
+}
+
+.card-custom {
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: none;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.card-custom .card-header {
+  padding: 16px 24px;
+  background: transparent;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.card-custom .card-body {
+  padding: 24px;
+}
+
+.badge-status {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
