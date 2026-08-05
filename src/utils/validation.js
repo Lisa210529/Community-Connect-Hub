@@ -28,7 +28,7 @@ export function validateEmail(email) {
 }
 
 export function validateNid(nid) {
-  return /^\d{10,12}$/.test(nid.replace(/\s/g, ''));
+  return /^\d{10}$/.test(String(nid).replace(/\s/g, ''));
 }
 
 export function getInitials(firstName = '', lastName = '') {

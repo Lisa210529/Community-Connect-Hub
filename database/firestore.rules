@@ -1,8 +1,38 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+
+    // NID registry — read during registration (before sign-in)
+    match /nids/{nid} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Ward lookup during registration
+    match /wards/{wardId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      // Allow existence check by userId during registration
+      allow get: if true;
+      allow list: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.email == request.auth.token.email;
+      allow update, delete: if request.auth != null
+        && (resource.data.uid == request.auth.uid || resource.data.email == request.auth.token.email);
+    }
+
+    // Pilot: authenticated access to app collections
+    match /{collection}/{document} {
+      allow read, write: if request.auth != null
+        && collection in [
+          'announcements', 'audit_logs', 'budgets', 'complaints', 'documents',
+          'funding_agencies', 'meetings', 'notifications', 'projects', 'ratings',
+          'requests', 'resolutions', 'settings', 'wdc_members'
+        ];
     }
   }
 }

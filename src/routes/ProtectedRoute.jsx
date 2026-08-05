@@ -1,19 +1,20 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 
 export default function ProtectedRoute({ allowedRoles }) {
   const { isAuthenticated, loading, role } = useAuth();
 
   if (loading) {
-    return <LoadingSpinner fullPage />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-bg">
+        <div className="text-cyber-accent animate-pulse">Loading…</div>
+      </div>
+    );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-  if (allowedRoles?.length && !allowedRoles.includes(role)) {
+  if (allowedRoles && !allowedRoles.includes(role)) {
     return <Navigate to="/" replace />;
   }
 

@@ -1,120 +1,146 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import AuthLogo, { AuthFooterLink } from '../../components/common/AuthLogo';
-import { loginUser, resetPassword } from '../../services/authService';
-import { validateEmail } from '../../utils/validation';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { ROLE_DASHBOARD_PATHS } from '../../constants';
+import Logo from '../../components/common/Logo';
 
 export default function LoginPage() {
+  const { login, dashboardPath, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showMfa, setShowMfa] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetMessage, setResetMessage] = useState('');
+
+  if (isAuthenticated) {
+    navigate(dashboardPath, { replace: true });
+    return null;
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      const { profile } = await loginUser(email.trim(), password);
-      const role = profile?.role ?? 'resident';
-      if (role === 'system_admin') navigate('/admin');
-      else if (role.startsWith('wdc_')) navigate('/wdc');
-      else if (['councillor', 'llg_admin', 'dda_officer', 'provincial_admin'].includes(role)) {
-        navigate('/government');
-      } else navigate('/resident');
+      const user = await login(identifier.trim(), password, rememberMe);
+      if (user.mfaEnabled && !showMfa) {
+        setShowMfa(true);
+        setLoading(false);
+        return;
+      }
+      navigate(ROLE_DASHBOARD_PATHS[user.role] ?? '/dashboard/resident');
     } catch (err) {
-      setError(err.message ?? 'Login failed. Please try again.');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleResetPassword(e) {
+  function handleMfaVerify(e) {
     e.preventDefault();
-    setResetMessage('');
-    if (!validateEmail(resetEmail)) {
-      setResetMessage('Please enter a valid email address.');
-      return;
-    }
-    try {
-      await resetPassword(resetEmail.trim());
-      setResetMessage('Password reset link sent. Check your email.');
-    } catch {
-      setResetMessage('Could not send reset email. Check the address and try again.');
+    if (mfaCode.length >= 6) {
+      navigate(dashboardPath);
+    } else {
+      setError('Enter a valid 6-digit MFA code.');
     }
   }
 
   return (
-    <div className="auth-card">
-      <AuthLogo />
-
-      {error && <div className="alert alert-danger">{error}</div>}
-
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="loginEmail">
-            <i className="fas fa-envelope" /> Email
-          </label>
-          <input
-            id="loginEmail"
-            type="email"
-            className="form-control"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email"
-            required
-            autoComplete="email"
-          />
+    <div className="min-h-screen bg-slate-bg flex items-center justify-center p-4">
+      <div className="cyber-card w-full max-w-md shadow-glow">
+        <div className="text-center mb-8">
+          <Logo />
+          <p className="text-cyber-muted text-sm mt-2">Sign in to your account</p>
         </div>
 
-        <div className="form-group">
-          <label htmlFor="loginPassword">
-            <i className="fas fa-lock" /> Password
-          </label>
-          <input
-            id="loginPassword"
-            type="password"
-            className="form-control"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
-            required
-            autoComplete="current-password"
-          />
-        </div>
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
+            {error}
+          </div>
+        )}
 
-        <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? 'Signing in…' : 'Sign In'}
-        </button>
-      </form>
+        {!showMfa ? (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm text-cyber-muted mb-1">Email</label>
+              <input
+                type="email"
+                className="cyber-input"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="resident@example.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-cyber-muted mb-1">Password</label>
+              <input
+                type="password"
+                className="cyber-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 text-cyber-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-slate-border"
+                />
+                Remember Me
+              </label>
+              <button type="button" className="text-cyber-accent hover:underline">
+                Forgot Password?
+              </button>
+            </div>
+            <button type="submit" className="cyber-btn-primary w-full" disabled={loading}>
+              {loading ? 'Signing in…' : 'Login'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleMfaVerify} className="space-y-4">
+            <p className="text-cyber-muted text-sm">
+              MFA Verification — enter the 6-digit code from your authenticator app (demo: any 6 digits).
+            </p>
+            <input
+              className="cyber-input text-center text-2xl tracking-widest"
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              maxLength={6}
+            />
+            <button type="submit" className="cyber-btn-primary w-full">
+              Verify &amp; Continue
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMfa(false)}
+              className="cyber-btn-secondary w-full"
+            >
+              Back
+            </button>
+          </form>
+        )}
 
-      <div className="auth-divider">or</div>
-
-      <form onSubmit={handleResetPassword} className="mt-2">
-        <div className="form-group">
-          <label htmlFor="resetEmail">
-            <i className="fas fa-key" /> Forgot password?
-          </label>
-          <input
-            id="resetEmail"
-            type="email"
-            className="form-control"
-            value={resetEmail}
-            onChange={(e) => setResetEmail(e.target.value)}
-            placeholder="Enter registered email"
-          />
-        </div>
-        <button type="submit" className="btn btn-outline-primary w-100">
-          Send Reset Link
-        </button>
-        {resetMessage && <p className="nid-feedback info mt-2">{resetMessage}</p>}
-      </form>
-
-      <AuthFooterLink text="Don't have an account?" linkText="Register" to="/register" />
+        <p className="text-center text-cyber-muted text-sm mt-6">
+          Don&apos;t have an account?{' '}
+          <Link to="/signup" className="text-cyber-accent hover:underline">
+            Register now
+          </Link>
+        </p>
+        <p className="text-center text-cyber-muted text-xs mt-2">
+          Pre-registered official?{' '}
+          <Link to="/signup/official" className="text-cyber-accent hover:underline">
+            Complete official registration
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

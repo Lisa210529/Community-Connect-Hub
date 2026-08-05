@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-text-primary font-sans antialiased;
+  }
+}
+
+@layer components {
+  .cyber-card {
+    @apply bg-card border border-border rounded-xl p-6;
+  }
+  .cyber-input {
+    @apply w-full bg-background border border-border rounded-lg px-4 py-2.5 text-text-primary placeholder-text-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary;
+  }
+  .cyber-select {
+    @apply cyber-input appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23F8FAFC'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
+    padding-right: 2.5rem;
+  }
+  .cyber-select option {
+    @apply bg-card text-text-primary;
+  }
+  .cyber-btn-primary {
+    @apply bg-primary text-background font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50;
+  }
+  .cyber-btn-secondary {
+    @apply border border-border text-text-primary px-5 py-2.5 rounded-lg hover:border-primary hover:text-primary transition-colors;
+  }
+  .cyber-btn-danger {
+    @apply bg-status-rejected/20 text-status-rejected border border-status-rejected/40 px-4 py-2 rounded-lg hover:bg-status-rejected/30 transition-colors;
+  }
+  .cyber-btn-success {
+    @apply bg-status-completed/20 text-status-completed border border-status-completed/40 px-4 py-2 rounded-lg hover:bg-status-completed/30 transition-colors;
+  }
+  .nid-feedback {
+    @apply text-xs mt-1.5;
+  }
+  .nid-feedback.valid {
+    @apply text-status-completed;
+  }
+  .nid-feedback.invalid {
+    @apply text-status-rejected;
+  }
+  .nid-feedback.info {
+    @apply text-text-secondary;
+  }
+}

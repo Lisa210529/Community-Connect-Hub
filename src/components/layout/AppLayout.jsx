@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ROLE_LABELS } from '../../constants';
+import { ROLES } from '../../constants';
 import { getInitials } from '../../utils/validation';
 
 const NAV_ITEMS = [
@@ -72,7 +72,7 @@ export default function AppLayout() {
               <div className="name">
                 {profile?.firstName} {profile?.lastName}
               </div>
-              <div className="role">{ROLE_LABELS[role] ?? role}</div>
+              <div className="role">{ROLES[role] ?? role}</div>
               {profile?.ward && <div className="ward">Ward: {profile.ward}</div>}
             </div>
           </div>

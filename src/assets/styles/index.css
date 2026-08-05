@@ -1,4 +1,30 @@
-@import './variables.css';
-@import './global.css';
-@import './auth.css';
-@import './layout.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-bg text-cyber-text font-sans antialiased;
+  }
+}
+
+@layer components {
+  .cyber-card {
+    @apply bg-slate-card border border-slate-border rounded-xl p-6;
+  }
+  .cyber-input {
+    @apply w-full bg-slate-bg border border-slate-border rounded-lg px-4 py-2.5 text-cyber-text placeholder-cyber-muted focus:outline-none focus:border-cyber-accent focus:ring-1 focus:ring-cyber-accent;
+  }
+  .cyber-btn-primary {
+    @apply bg-cyber-accent text-slate-bg font-semibold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50;
+  }
+  .cyber-btn-secondary {
+    @apply border border-slate-border text-cyber-text px-5 py-2.5 rounded-lg hover:border-cyber-accent hover:text-cyber-accent transition-colors;
+  }
+  .cyber-btn-danger {
+    @apply bg-status-rejected/20 text-status-rejected border border-status-rejected/40 px-4 py-2 rounded-lg hover:bg-status-rejected/30 transition-colors;
+  }
+  .cyber-btn-success {
+    @apply bg-status-completed/20 text-status-completed border border-status-completed/40 px-4 py-2 rounded-lg hover:bg-status-completed/30 transition-colors;
+  }
+}
