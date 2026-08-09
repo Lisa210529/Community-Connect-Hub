@@ -4,8 +4,7 @@ import Logo from '../../components/common/Logo';
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-slate-bg flex flex-col">
-      <header className="border-b border-slate-border px-6 py-4 flex items-center justify-between">
-        <Logo align="left" size="sm" />
+      <header className="border-b border-slate-border px-6 py-4 flex items-center justify-end">
         <div className="flex gap-3">
           <Link to="/login" className="cyber-btn-secondary">
             Login
