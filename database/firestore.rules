@@ -2,36 +2,113 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // NID registry — read during registration (before sign-in)
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasUserProfile() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return hasUserProfile() && userProfile().role == 'system-admin';
+    }
+
+    // Official completes registration: users/{uid} already created with matching NID
+    function isOfficialCompletingPreReg() {
+      return hasUserProfile()
+        && resource.data.isRegistered == false
+        && request.resource.data.isRegistered == true
+        && userProfile().nid == resource.data.nid;
+    }
+
+    function isOwnRegistrationWrite(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.role is string
+        && request.resource.data.nid is string;
+    }
+
+    // NID registry — read during registration
     match /nids/{nid} {
       allow read: if true;
       allow write: if false;
     }
 
-    // Ward lookup during registration
+    // Users collection
+    match /users/{userId} {
+      // Public read/list for NID and email uniqueness checks during signup
+      allow get, list: if true;
+
+      // Create or overwrite own profile during registration (including retry after failed attempt)
+      allow create: if isOwnRegistrationWrite(userId);
+      allow update: if isOwnRegistrationWrite(userId) || isAdmin();
+
+      // Remove orphaned profiles from failed registration attempts (same NID, different uid)
+      allow delete: if isAdmin() || (
+        hasUserProfile()
+        && request.auth.uid != userId
+        && resource.data.nid == userProfile().nid
+      );
+    }
+
+    // Pre-registered officials
+    match /preRegisteredUsers/{docId} {
+      // Public read for verification before sign-in
+      allow read: if true;
+      allow create, delete: if isAdmin();
+
+      // Official marks pre-reg complete after creating users/{uid} with matching NID
+      allow update: if isAdmin() || isOfficialCompletingPreReg();
+    }
+
+    // Wards
     match /wards/{wardId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
-    // User profiles
-    match /users/{userId} {
-      // Allow existence check by userId during registration
-      allow get: if true;
-      allow list: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.email == request.auth.token.email;
-      allow update, delete: if request.auth != null
-        && (resource.data.uid == request.auth.uid || resource.data.email == request.auth.token.email);
+    // Projects
+    match /projects/{projectId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
     }
 
-    // Pilot: authenticated access to app collections
+    // Requests
+    match /requests/{requestId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Announcements
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Audit logs
+    match /audit_logs/{logId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+    }
+
+    // Other app collections
     match /{collection}/{document} {
-      allow read, write: if request.auth != null
+      allow read, write: if isSignedIn()
         && collection in [
-          'announcements', 'audit_logs', 'budgets', 'complaints', 'documents',
-          'funding_agencies', 'meetings', 'notifications', 'projects', 'ratings',
-          'requests', 'resolutions', 'settings', 'wdc_members'
+          'budgets', 'complaints', 'documents', 'funding_agencies', 'meetings',
+          'notifications', 'ratings', 'resolutions', 'settings', 'wdc_members', 'openMembers'
         ];
     }
   }

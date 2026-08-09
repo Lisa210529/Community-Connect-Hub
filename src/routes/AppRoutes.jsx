@@ -35,6 +35,7 @@ export default function AppRoutes() {
       <Route path="/login" element={isAuthenticated ? <Navigate to={dashboardPath} replace /> : <Login />} />
       <Route path="/signup" element={<Register />} />
       <Route path="/signup/official" element={<OfficialSignupPage />} />
+      <Route path="/official-register" element={<OfficialSignupPage />} />
       <Route path="/register" element={<Navigate to="/signup" replace />} />
 
       <Route element={<ProtectedRoute allowedRoles={['system-admin']} />}>

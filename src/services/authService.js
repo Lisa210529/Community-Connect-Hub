@@ -15,169 +15,531 @@ import {
   getDoc,
   doc,
   setDoc,
+  updateDoc,
+  deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
-/**
- * Look up a user profile in Firestore by email.
- */
-export async function getUserProfileByEmail(email) {
-  const snapshot = await getDocs(
-    query(collection(db, 'users'), where('email', '==', email), limit(1)),
-  );
-  if (snapshot.empty) return null;
-  const userDoc = snapshot.docs[0];
-  return { id: userDoc.id, ...userDoc.data() };
+function mapAuthError(error) {
+  const code = error?.code ?? '';
+  const messages = {
+    'auth/email-already-in-use': 'This email is already registered. Please login instead.',
+    'auth/invalid-email': 'Please enter a valid email address.',
+    'auth/user-not-found': 'No account found with this email.',
+    'auth/wrong-password': 'Incorrect password. Please try again.',
+    'auth/invalid-credential': 'Invalid email or password.',
+    'auth/too-many-requests': 'Too many attempts. Please try again later.',
+    'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
+  };
+  return new Error(messages[code] ?? error?.message ?? 'Authentication failed.');
 }
 
-/** Returns true if this NID is already linked to a registered user. */
-export async function isNidAlreadyRegistered(nidNumber) {
+export function getNidFromData(data) {
+  return data?.nid ?? data?.pid ?? '';
+}
+
+export function getRoleFromData(data) {
+  return data?.role ?? data?.userCategory ?? 'resident';
+}
+
+export function normalizeProfile(uid, data) {
+  const fullName =
+    data.fullName ??
+    data.nidVerifiedName ??
+    [data.firstName, data.lastName].filter(Boolean).join(' ').trim();
+  const firstName = data.firstName ?? fullName.split(/\s+/)[0] ?? '';
+  const lastName = data.lastName ?? fullName.split(/\s+/).slice(1).join(' ') ?? '';
+  const nid = getNidFromData(data);
+  const role = getRoleFromData(data);
+
+  return {
+    id: uid,
+    uid: data.uid ?? uid,
+    email: data.email ?? '',
+    nid,
+    pid: nid,
+    role,
+    firstName,
+    lastName,
+    name: fullName || `${firstName} ${lastName}`.trim(),
+    phone: data.phone ?? '',
+    ward: data.ward ?? (data.wardNumber ? `Ward ${data.wardNumber}` : ''),
+    wardId: data.wardId ?? '',
+    wardNumber: data.wardNumber ?? '',
+    province: data.province ?? '',
+    district: data.district ?? '',
+    llg: data.llg ?? '',
+    position: data.position ?? '',
+    isApproved: Boolean(data.isApproved),
+    isRegistered: data.isRegistered !== false,
+    isActive: data.isActive !== false,
+    mfaEnabled: Boolean(data.mfaEnabled),
+    createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt ?? '',
+    registeredAt: data.registeredAt?.toDate?.()?.toISOString?.() ?? data.registeredAt ?? '',
+  };
+}
+
+async function rollbackAuthUser(authUser) {
+  if (!authUser) return;
+  try {
+    await deleteUser(authUser);
+  } catch {
+    // May require recent sign-in; admin cleanup if needed
+  }
+}
+
+export async function getUserData(uid) {
+  const snap = await getDoc(doc(db, 'users', uid));
+  if (!snap.exists()) return null;
+  return normalizeProfile(uid, snap.data());
+}
+
+export async function findUserByNid(nid) {
+  const normalized = String(nid ?? '').replace(/\s/g, '');
+  const usersRef = collection(db, 'users');
+  const byNid = await getDocs(query(usersRef, where('nid', '==', normalized), limit(1)));
+  if (!byNid.empty) {
+    const userDoc = byNid.docs[0];
+    return { id: userDoc.id, ...userDoc.data() };
+  }
+  const byPid = await getDocs(query(usersRef, where('pid', '==', normalized), limit(1)));
+  if (!byPid.empty) {
+    const userDoc = byPid.docs[0];
+    return { id: userDoc.id, ...userDoc.data() };
+  }
+  return null;
+}
+
+export async function checkNIDExists(nid) {
+  return Boolean(await findUserByNid(nid));
+}
+
+/** Official signup: allow retry when a failed attempt left a profile with the same email */
+async function assessOfficialNidAvailability(nid, email) {
+  const normalizedNid = String(nid ?? '').replace(/\s/g, '');
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await findUserByNid(normalizedNid);
+
+  if (!existing) {
+    return { allowed: true };
+  }
+
+  const existingEmail = (existing.email ?? '').toLowerCase();
+  if (existingEmail !== normalizedEmail) {
+    return { allowed: false, message: 'NID already registered.' };
+  }
+
+  const record = await getPreRegRecord(normalizedNid, normalizedEmail);
+  if (!record) {
+    return {
+      allowed: false,
+      message: 'This account is already registered. Please login instead.',
+    };
+  }
+
+  return { allowed: true, record, needsRecovery: true, existingUser: existing };
+}
+
+async function removeStaleOfficialProfiles(authUid, email, nid) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedNid = String(nid ?? '').replace(/\s/g, '');
+  try {
+    const snapshot = await getDocs(
+      query(collection(db, 'users'), where('nid', '==', normalizedNid)),
+    );
+
+    await Promise.all(
+      snapshot.docs
+        .filter((userDoc) => userDoc.id !== authUid)
+        .filter((userDoc) => (userDoc.data().email ?? '').toLowerCase() === normalizedEmail)
+        .map((userDoc) => deleteDoc(doc(db, 'users', userDoc.id))),
+    );
+  } catch {
+    // Non-fatal: registration can still proceed if cleanup is blocked
+  }
+}
+
+function buildOfficialUserPayload(authUser, record, normalizedNid, normalizedEmail) {
+  const nameParts = record.fullName.trim().split(/\s+/);
+  return {
+    uid: authUser.uid,
+    userId: authUser.uid,
+    fullName: record.fullName,
+    firstName: nameParts[0] ?? '',
+    lastName: nameParts.slice(1).join(' '),
+    email: normalizedEmail,
+    nid: normalizedNid,
+    pid: normalizedNid,
+    phone: record.phone ?? '',
+    role: record.role,
+    userCategory: record.role,
+    position: record.position ?? '',
+    ward: record.ward ?? '',
+    wardId: record.wardId ?? '',
+    wardNumber: record.wardNumber ?? '',
+    province: record.province ?? 'Madang',
+    district: record.district ?? '',
+    llg: record.llg ?? '',
+    isApproved: true,
+    isRegistered: true,
+    isActive: true,
+    mfaEnabled: false,
+    createdAt: serverTimestamp(),
+    registeredAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+}
+
+async function rollbackOfficialRegistration(authUser, createdAuth) {
+  if (!authUser) return;
+  try {
+    await deleteDoc(doc(db, 'users', authUser.uid));
+  } catch {
+    // Profile may not exist yet
+  }
+  if (createdAuth) {
+    await rollbackAuthUser(authUser);
+  } else {
+    await signOut(auth);
+  }
+}
+
+export async function checkEmailExists(email) {
+  const normalizedEmail = email.trim().toLowerCase();
   const snapshot = await getDocs(
-    query(collection(db, 'users'), where('nid', '==', nidNumber), limit(1)),
+    query(collection(db, 'users'), where('email', '==', normalizedEmail), limit(1)),
   );
   return !snapshot.empty;
 }
 
-/** Validate NID against Firestore nids collection (3NF lookup). */
-export async function validateNidFromFirestore(nidNumber) {
-  if (!/^\d{10}$/.test(nidNumber)) {
-    return {
-      valid: false,
-      message: 'NID must be exactly 10 digits (e.g., 1234567890).',
-    };
-  }
-
-  const snapshot = await getDoc(doc(db, 'nids', nidNumber));
-  if (!snapshot.exists()) {
-    return {
-      valid: false,
-      message: 'NID not found. Please check your number or contact your LLG office.',
-    };
-  }
-
-  const nidData = snapshot.data();
-  if (nidData.status !== 'active') {
-    return {
-      valid: false,
-      message: 'This NID is not active. Please contact your LLG office.',
-    };
-  }
-
-  return {
-    valid: true,
-    message: `NID verified: ${nidData.name} (Ward ${nidData.ward})`,
-    userData: nidData,
-  };
-}
-
-/** Resolve wardId from NID ward number. */
-export async function resolveWardIdFromNid(nidData) {
-  const wardNumber = String(nidData.ward);
+export async function checkNidInPreRegistered(nid) {
+  const normalized = String(nid ?? '').replace(/\s/g, '');
   const snapshot = await getDocs(
-    query(collection(db, 'wards'), where('wardNumber', '==', wardNumber), limit(1)),
+    query(collection(db, 'preRegisteredUsers'), where('nid', '==', normalized), limit(1)),
   );
-
-  if (!snapshot.empty) {
-    return snapshot.docs[0].id;
-  }
-
-  const pilotWard = await getDoc(doc(db, 'wards', 'ward_5'));
-  if (pilotWard.exists()) {
-    return 'ward_5';
-  }
-
-  return null;
+  return !snapshot.empty;
 }
 
-/** Gate system access using the Firestore profile (after Auth password check). */
-export function canAccessSystem(userProfile) {
-  if (!userProfile) {
-    return { allowed: false, message: 'Account not found in the system. Please register first.' };
+export async function checkEmailInPreRegistered(email) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const snapshot = await getDocs(
+    query(collection(db, 'preRegisteredUsers'), where('email', '==', normalizedEmail), limit(1)),
+  );
+  return !snapshot.empty;
+}
+
+/** Validate official signup against preRegisteredUsers */
+export async function validateOfficialRegistration({ nid, email }) {
+  const normalized = String(nid ?? '').replace(/\s/g, '');
+  if (!/^\d{10}$/.test(normalized)) {
+    return { valid: false, message: 'NID must be exactly 10 digits.' };
   }
-  if (!userProfile.isApproved) {
-    return { allowed: false, message: 'Your account is pending approval. Please contact support.' };
+
+  const nidCheck = await assessOfficialNidAvailability(normalized, email);
+  if (!nidCheck.allowed) {
+    return { valid: false, message: nidCheck.message };
   }
-  if (!userProfile.isActive) {
-    return { allowed: false, message: 'Your account is inactive. Please contact support.' };
+
+  const record = nidCheck.record ?? (await getPreRegRecord(normalized, email));
+  if (!record) {
+    return {
+      valid: false,
+      message: 'You are not pre-registered. Please contact your administrator.',
+    };
+  }
+
+  return { valid: true, record, needsRecovery: Boolean(nidCheck.needsRecovery) };
+}
+
+export async function getPreRegRecord(nid, email) {
+  const normalized = String(nid ?? '').replace(/\s/g, '');
+  const normalizedEmail = email.trim().toLowerCase();
+  const snapshot = await getDocs(
+    query(collection(db, 'preRegisteredUsers'), where('nid', '==', normalized), limit(1)),
+  );
+  if (snapshot.empty) return null;
+  const record = { id: snapshot.docs[0].id, preRegId: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+  if (record.email?.toLowerCase() !== normalizedEmail) return null;
+  if (record.isRegistered) return null;
+  return record;
+}
+
+export function canAccessSystem(profile) {
+  if (!profile) {
+    return { allowed: false, message: 'User account not found in system. Please contact administrator.' };
+  }
+  if (profile.isActive === false) {
+    return { allowed: false, message: 'Your account has been deactivated. Please contact administrator.' };
+  }
+  if (profile.isApproved === false) {
+    return {
+      allowed: false,
+      message: 'Your account is pending approval. Please wait for admin approval.',
+    };
   }
   return { allowed: true };
 }
 
-export async function registerUser({ email, password, profile }) {
-  const { userId, role, firstName, lastName, nid } = profile;
+/** Register user — stores nid, pid, userCategory, role in Firestore */
+export async function registerUser(userData) {
+  const normalizedNid = String(userData.nid ?? '').replace(/\s/g, '');
+  const normalizedEmail = userData.email.trim().toLowerCase();
+  const role = userData.role || 'resident';
 
-  const nidValidation = await validateNidFromFirestore(nid);
-  if (!nidValidation.valid) {
-    throw new Error(nidValidation.message);
+  if (!/^\d{10}$/.test(normalizedNid)) {
+    throw new Error('NID must be exactly 10 digits');
   }
-
-  const existingUserId = await getDoc(doc(db, 'users', userId));
-  if (existingUserId.exists()) {
-    throw new Error('This User ID is already registered. Please login or use a different ID.');
+  if (await checkNIDExists(normalizedNid)) {
+    throw new Error('NID already registered. Please use a different NID.');
   }
-
-  const wardId = await resolveWardIdFromNid(nidValidation.userData);
-  if (!wardId) {
-    throw new Error('Could not resolve ward for this NID. Please contact your LLG office.');
+  if (role === 'resident' && (await checkNidInPreRegistered(normalizedNid))) {
+    throw new Error('You are a pre-registered official. Please use the official registration page.');
+  }
+  if (await checkEmailExists(normalizedEmail)) {
+    throw new Error('Email already registered. Please use a different email.');
   }
 
   let authUser = null;
-
   try {
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const credential = await createUserWithEmailAndPassword(
+      auth,
+      normalizedEmail,
+      userData.password,
+    );
     authUser = credential.user;
 
-    if (await isNidAlreadyRegistered(nid)) {
-      throw new Error('This NID is already registered. Each resident may only register once.');
-    }
-
+    const firstName = userData.firstName?.trim() ?? '';
+    const lastName = userData.lastName?.trim() ?? '';
+    const fullName =
+      userData.fullName?.trim() || `${firstName} ${lastName}`.trim();
     const isResident = role === 'resident';
 
-    await setDoc(doc(db, 'users', userId), {
-      userId,
+    await setDoc(doc(db, 'users', authUser.uid), {
+      uid: authUser.uid,
+      userId: authUser.uid,
       firstName,
       lastName,
-      email,
-      nid,
+      fullName,
+      email: normalizedEmail,
+      nid: normalizedNid,
+      pid: normalizedNid,
+      phone: userData.phone || '',
       role,
-      wardId,
-      uid: authUser.uid,
-      isApproved: isResident,
+      userCategory: role,
+      wardId: userData.wardId || '',
+      wardNumber: userData.wardNumber || '',
+      ward: userData.ward || (userData.wardNumber ? `Ward ${userData.wardNumber}` : ''),
+      province: userData.province || 'Madang',
+      district: userData.district || 'Madang',
+      llg: userData.llg || 'Madang Urban',
+      isApproved: !isResident,
+      isRegistered: true,
       isActive: true,
       mfaEnabled: false,
-      mfaSmsEnabled: false,
-      mfaTotpEnabled: false,
       createdAt: serverTimestamp(),
+      registeredAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
     await signOut(auth);
-    return authUser;
+    return { user: authUser, role, needsApproval: isResident };
   } catch (error) {
-    if (authUser) {
-      try {
-        await deleteUser(authUser);
-      } catch {
-        // Auth account may need recent sign-in to delete; admin cleanup if needed
+    await rollbackAuthUser(authUser);
+    if (error.code?.startsWith('auth/')) throw mapAuthError(error);
+    throw error;
+  }
+}
+
+export async function registerResidentUser(userData) {
+  return registerUser({ ...userData, role: 'resident' });
+}
+
+export async function registerOfficialUser({ email, nid, password }) {
+  const normalizedNid = String(nid ?? '').replace(/\s/g, '');
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!/^\d{10}$/.test(normalizedNid)) {
+    throw new Error('NID must be exactly 10 digits.');
+  }
+
+  const nidCheck = await assessOfficialNidAvailability(normalizedNid, normalizedEmail);
+  if (!nidCheck.allowed) {
+    throw new Error(nidCheck.message);
+  }
+
+  const record = nidCheck.record ?? (await getPreRegRecord(normalizedNid, normalizedEmail));
+  if (!record) {
+    throw new Error('You are not pre-registered. Please contact your administrator.');
+  }
+
+  let authUser = null;
+  let createdAuth = false;
+
+  try {
+    let credential;
+    try {
+      credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+      authUser = credential.user;
+      createdAuth = true;
+    } catch (error) {
+      if (error.code === 'auth/email-already-in-use') {
+        credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+        authUser = credential.user;
+      } else {
+        throw error;
       }
     }
-    if (error.code === 'auth/email-already-in-use') {
-      throw new Error('This email is already registered. Please login instead.');
-    }
+
+    await removeStaleOfficialProfiles(authUser.uid, normalizedEmail, normalizedNid);
+
+    await setDoc(
+      doc(db, 'users', authUser.uid),
+      buildOfficialUserPayload(authUser, record, normalizedNid, normalizedEmail),
+      { merge: true },
+    );
+
+    await updateDoc(doc(db, 'preRegisteredUsers', record.id), {
+      isRegistered: true,
+      registeredAt: serverTimestamp(),
+    });
+
+    await signOut(auth);
+    return { uid: authUser.uid, needsApproval: false, role: record.role };
+  } catch (error) {
+    await rollbackOfficialRegistration(authUser, createdAuth);
+    if (error.code?.startsWith('auth/')) throw mapAuthError(error);
     throw error;
   }
 }
 
 export async function loginUser(email, password) {
-  const credential = await signInWithEmailAndPassword(auth, email, password);
-  const profile = await getUserProfileByEmail(email);
-  const access = canAccessSystem(profile);
-  if (!access.allowed) {
-    await signOut(auth);
-    throw new Error(access.message);
+  try {
+    const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+    const profile = await getUserData(credential.user.uid);
+    const access = canAccessSystem(profile);
+    if (!access.allowed) {
+      await signOut(auth);
+      throw new Error(access.message);
+    }
+    return { firebaseUser: credential.user, profile, ...profile };
+  } catch (error) {
+    if (error.code?.startsWith('auth/')) throw mapAuthError(error);
+    throw error;
   }
-  return { user: credential.user, profile };
+}
+
+export async function updateUserData(uid, data) {
+  const payload = { ...data, updatedAt: serverTimestamp() };
+  if (data.firstName || data.lastName) {
+    payload.fullName = `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim();
+  }
+  await updateDoc(doc(db, 'users', uid), payload);
+  return getUserData(uid);
+}
+
+export const updateUserProfile = updateUserData;
+
+export async function getAllUsers() {
+  return fetchAllUsers();
+}
+
+export async function fetchAllUsers() {
+  const snapshot = await getDocs(collection(db, 'users'));
+  return snapshot.docs
+    .map((d) => normalizeProfile(d.id, d.data()))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function getPendingUsers() {
+  return fetchPendingResidents();
+}
+
+export async function fetchPendingResidents() {
+  const snapshot = await getDocs(
+    query(collection(db, 'users'), where('isApproved', '==', false)),
+  );
+  return snapshot.docs
+    .map((d) => normalizeProfile(d.id, d.data()))
+    .filter((u) => u.role === 'resident')
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+export async function approveUser(uid, adminUid) {
+  await updateDoc(doc(db, 'users', uid), {
+    isApproved: true,
+    isActive: true,
+    approvedBy: adminUid ?? '',
+    approvedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function rejectUser(uid, reason = '') {
+  await updateDoc(doc(db, 'users', uid), {
+    isApproved: false,
+    isActive: false,
+    rejectionReason: reason,
+    rejectedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function setUserActive(uid, isActive) {
+  await updateDoc(doc(db, 'users', uid), {
+    isActive,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function preRegisterOfficial(payload, adminUid) {
+  const normalizedNid = String(payload.nid ?? '').replace(/\s/g, '');
+  if (!/^\d{10}$/.test(normalizedNid)) {
+    throw new Error('NID must be exactly 10 digits.');
+  }
+  if (await checkNIDExists(normalizedNid)) {
+    throw new Error('NID already registered to a user.');
+  }
+  if (await checkNidInPreRegistered(normalizedNid)) {
+    throw new Error('NID already in pre-registration list.');
+  }
+  if (await checkEmailInPreRegistered(payload.email)) {
+    throw new Error('Email already in pre-registration list.');
+  }
+
+  const wardNumber = payload.ward?.match(/\d+/)?.[0] ?? payload.wardNumber ?? '';
+  const wardId = payload.wardId ?? (wardNumber ? `ward_${wardNumber}` : '');
+  const preRegRef = doc(collection(db, 'preRegisteredUsers'));
+
+  await setDoc(preRegRef, {
+    preRegId: preRegRef.id,
+    fullName: payload.fullName.trim(),
+    email: payload.email.trim().toLowerCase(),
+    nid: normalizedNid,
+    role: payload.role,
+    position: payload.position?.trim() ?? '',
+    ward: payload.ward?.trim() ?? '',
+    wardId,
+    wardNumber,
+    province: payload.province ?? 'Madang Province',
+    district: payload.district ?? 'Madang District',
+    llg: payload.llg ?? 'Madang Urban',
+    isRegistered: false,
+    createdBy: adminUid ?? '',
+    createdAt: serverTimestamp(),
+  });
+  return { id: preRegRef.id, preRegId: preRegRef.id, ...payload, nid: normalizedNid };
+}
+
+export async function fetchPreRegisteredUsers() {
+  const snapshot = await getDocs(collection(db, 'preRegisteredUsers'));
+  return snapshot.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() ?? new Date(a.createdAt ?? 0);
+      const bTime = b.createdAt?.toDate?.() ?? new Date(b.createdAt ?? 0);
+      return bTime - aTime;
+    });
 }
 
 export async function logoutUser() {
@@ -185,9 +547,44 @@ export async function logoutUser() {
 }
 
 export async function resetPassword(email) {
-  await sendPasswordResetEmail(auth, email);
+  await sendPasswordResetEmail(auth, email.trim());
 }
 
 export function subscribeToAuthChanges(callback) {
   return onAuthStateChanged(auth, callback);
+}
+
+export function getCurrentUser() {
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      unsubscribe();
+      if (!user) {
+        resolve(null);
+        return;
+      }
+      try {
+        const profile = await getUserData(user.uid);
+        if (profile?.isApproved && profile?.isActive) {
+          resolve({ ...user, ...profile });
+        } else {
+          resolve(null);
+        }
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+export async function getUserProfileByEmail(email) {
+  const snapshot = await getDocs(
+    query(collection(db, 'users'), where('email', '==', email.trim().toLowerCase()), limit(1)),
+  );
+  if (snapshot.empty) return null;
+  const userDoc = snapshot.docs[0];
+  return normalizeProfile(userDoc.id, userDoc.data());
+}
+
+export async function isNidAlreadyRegistered(nid) {
+  return checkNIDExists(nid);
 }

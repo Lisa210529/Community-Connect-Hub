@@ -11,6 +11,7 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "seed:emulator": "node scripts/seed-emulator.js",
     "seed:production": "node scripts/seed-production.js",
+    "seed:pre-registered": "node scripts/seed-pre-registered.js",
     "cleanup:production": "node scripts/cleanup-production.js"
   },
   "dependencies": {

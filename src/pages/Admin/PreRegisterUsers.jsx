@@ -1,30 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext';
 import { ROLES } from '../../constants';
+import { fetchPreRegisteredUsers } from '../../services/authService';
 import PreRegisterForm from '../../components/forms/PreRegisterForm';
 import StatusBadge from '../../components/ui/StatusBadge';
 
 export default function PreRegisterUsersPage() {
   const { user, preRegisterOfficial } = useAuth();
-  const { getData, refresh } = useData();
+  const [preRegistered, setPreRegistered] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
-  const preRegistered = (getData()?.preRegisteredUsers ?? getData()?.preregisteredOfficials ?? [])
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const loadList = useCallback(async () => {
+    setListLoading(true);
+    try {
+      const data = await fetchPreRegisteredUsers();
+      setPreRegistered(data);
+    } catch (err) {
+      setError(err.message ?? 'Failed to load pre-registered officials.');
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
 
-  function handleSubmit(form, setFormError) {
+  useEffect(() => {
+    loadList();
+  }, [loadList]);
+
+  async function handleSubmit(form, setFormError) {
     setLoading(true);
     setMessage('');
+    setError('');
     try {
-      preRegisterOfficial(form, user);
-      refresh();
+      await preRegisterOfficial(form, user);
       setMessage('Official pre-registered successfully.');
+      await loadList();
     } catch (err) {
-      if (setFormError) setFormError(err.message);
-      else setMessage(err.message);
+      const msg = err.message ?? 'Failed to pre-register official.';
+      if (setFormError) setFormError(msg);
+      else setError(msg);
     } finally {
       setLoading(false);
     }
@@ -49,37 +66,46 @@ export default function PreRegisterUsersPage() {
             {message}
           </div>
         )}
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
+            {error}
+          </div>
+        )}
         <PreRegisterForm onSubmit={handleSubmit} loading={loading} />
       </div>
 
       <div className="cyber-card overflow-x-auto">
         <h2 className="font-semibold mb-4">Pre-Registered Officials ({preRegistered.length})</h2>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-cyber-muted border-b border-slate-border text-left">
-              <th className="pb-3 pr-4">Name</th>
-              <th className="pb-3 pr-4">NID</th>
-              <th className="pb-3 pr-4">Email</th>
-              <th className="pb-3 pr-4">Role</th>
-              <th className="pb-3 pr-4">Position</th>
-              <th className="pb-3">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {preRegistered.map((o) => (
-              <tr key={o.id ?? o.preRegId} className="border-b border-slate-border/50">
-                <td className="py-3 pr-4 font-medium">{o.fullName}</td>
-                <td className="py-3 pr-4 font-mono">{o.nid}</td>
-                <td className="py-3 pr-4">{o.email}</td>
-                <td className="py-3 pr-4">{ROLES[o.role] ?? o.role}</td>
-                <td className="py-3 pr-4 text-cyber-muted">{o.position}</td>
-                <td className="py-3">
-                  <StatusBadge status={o.isRegistered ? 'Completed' : 'Pending'} />
-                </td>
+        {listLoading ? (
+          <p className="text-cyber-muted text-center py-8">Loading…</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-cyber-muted border-b border-slate-border text-left">
+                <th className="pb-3 pr-4">Name</th>
+                <th className="pb-3 pr-4">NID</th>
+                <th className="pb-3 pr-4">Email</th>
+                <th className="pb-3 pr-4">Role</th>
+                <th className="pb-3 pr-4">Position</th>
+                <th className="pb-3">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {preRegistered.map((o) => (
+                <tr key={o.id} className="border-b border-slate-border/50">
+                  <td className="py-3 pr-4 font-medium">{o.fullName}</td>
+                  <td className="py-3 pr-4 font-mono">{o.nid}</td>
+                  <td className="py-3 pr-4">{o.email}</td>
+                  <td className="py-3 pr-4">{ROLES[o.role] ?? o.role}</td>
+                  <td className="py-3 pr-4 text-cyber-muted">{o.position}</td>
+                  <td className="py-3">
+                    <StatusBadge status={o.isRegistered ? 'Completed' : 'Pending'} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

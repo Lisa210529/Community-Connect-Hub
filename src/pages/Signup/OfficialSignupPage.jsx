@@ -1,96 +1,103 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ROLES, PASSWORD_RULE_LABELS } from '../../constants';
+import { ROLES, ROLE_DASHBOARD_PATHS, PASSWORD_RULE_LABELS } from '../../constants';
 import { validatePassword } from '../../utils/validation';
-import {
-  validateNID,
-  checkNidExists,
-  getPreRegRecord,
-} from '../../utils/validators';
+import { validateOfficialRegistration } from '../../services/authService';
 import Logo from '../../components/common/Logo';
 
 export default function OfficialSignupPage() {
-  const { registerOfficial } = useAuth();
-  const [form, setForm] = useState({
-    email: '',
+  const { registerOfficial, login } = useAuth();
+  const navigate = useNavigate();
+
+  const [step, setStep] = useState('verify');
+  const [formData, setFormData] = useState({
     nid: '',
+    email: '',
     password: '',
     confirmPassword: '',
-    acceptedTerms: false,
+    termsAccepted: false,
   });
   const [preRegRecord, setPreRegRecord] = useState(null);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [nidFeedback, setNidFeedback] = useState({ text: '', type: 'info' });
-  const passwordCheck = validatePassword(form.password);
+  const [isValidating, setIsValidating] = useState(false);
+  const passwordCheck = validatePassword(formData.password);
 
-  function update(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  function updateField(field, value) {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   }
 
-  function validatePreReg() {
-    const nid = form.nid.trim();
-    const email = form.email.trim();
-    if (!validateNID(nid)) {
-      setPreRegRecord(null);
-      if (nid.length === 10) {
-        setNidFeedback({ text: 'NID must be exactly 10 digits.', type: 'invalid' });
-      }
-      return;
-    }
-    if (checkNidExists(nid)) {
-      setPreRegRecord(null);
-      setNidFeedback({ text: 'NID already registered.', type: 'invalid' });
-      return;
-    }
-    if (!email) {
-      setPreRegRecord(null);
-      setNidFeedback({ text: 'Enter your pre-registered email to verify.', type: 'info' });
-      return;
-    }
-    const record = getPreRegRecord(nid, email);
-    if (!record) {
-      setPreRegRecord(null);
-      setNidFeedback({
-        text: 'No matching pre-registration found. Contact your administrator.',
-        type: 'invalid',
-      });
-      return;
-    }
-    setPreRegRecord(record);
-    setNidFeedback({
-      text: `Verified: ${record.fullName} — ${ROLES[record.role] ?? record.role}`,
-      type: 'valid',
-    });
-  }
-
-  async function handleSubmit(e) {
+  async function handleVerify(e) {
     e.preventDefault();
     setError('');
-    const record = getPreRegRecord(form.nid.trim(), form.email.trim());
-    if (!record) {
-      setError('You are not pre-registered. Please contact your administrator.');
-      return;
-    }
-    setPreRegRecord(record);
-    if (!validateNID(form.nid.trim())) {
-      setError('NID must be exactly 10 digits.');
-      return;
-    }
-    if (!passwordCheck.valid) {
-      setError(passwordCheck.message);
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
     setLoading(true);
+
     try {
-      await registerOfficial(form);
-      setSuccess(true);
+      const cleanNid = formData.nid.replace(/\s/g, '');
+      if (!/^\d{10}$/.test(cleanNid)) {
+        throw new Error('NID must be exactly 10 digits');
+      }
+      if (!formData.email.includes('@')) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      setIsValidating(true);
+      const check = await validateOfficialRegistration({
+        nid: cleanNid,
+        email: formData.email.trim(),
+      });
+
+      if (!check.valid) {
+        throw new Error(check.message);
+      }
+
+      setPreRegRecord(check.record);
+      setStep('register');
+    } catch (err) {
+      setError(err.message);
+      setPreRegRecord(null);
+    } finally {
+      setLoading(false);
+      setIsValidating(false);
+    }
+  }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (!passwordCheck.valid) {
+        throw new Error(passwordCheck.message);
+      }
+      if (formData.password !== formData.confirmPassword) {
+        throw new Error('Passwords do not match');
+      }
+      if (!formData.termsAccepted) {
+        throw new Error('You must accept the Terms & Conditions');
+      }
+      if (!preRegRecord) {
+        throw new Error('Pre-registration not verified. Go back and verify again.');
+      }
+
+      const result = await registerOfficial({
+        email: preRegRecord.email,
+        nid: preRegRecord.nid,
+        password: formData.password,
+        acceptedTerms: true,
+      });
+
+      const role = result.role ?? preRegRecord.role;
+      await login(preRegRecord.email, formData.password);
+
+      navigate(ROLE_DASHBOARD_PATHS[role] || '/dashboard/resident', {
+        replace: true,
+        state: {
+          message: `Welcome ${preRegRecord.fullName}! Your official account is active.`,
+        },
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -98,29 +105,14 @@ export default function OfficialSignupPage() {
     }
   }
 
-  if (success) {
-    return (
-      <div className="min-h-screen bg-slate-bg flex items-center justify-center p-4">
-        <div className="cyber-card max-w-md text-center shadow-glow">
-          <i className="fas fa-check-circle text-status-completed text-5xl mb-4" />
-          <h2 className="text-xl font-bold text-cyber-accent">Registration Complete</h2>
-          <p className="text-cyber-muted mt-3">
-            Your official account has been activated. You can sign in immediately.
-          </p>
-          <Link to="/login" className="cyber-btn-primary inline-block mt-6">
-            Sign In
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-bg flex items-center justify-center p-4">
       <div className="cyber-card w-full max-w-lg shadow-glow">
-        <div className="text-center mb-6">
+        <div className="flex flex-col items-center text-center mb-6">
           <Logo />
-          <p className="text-cyber-muted text-sm mt-2">Government Official Registration</p>
+          <h2 className="text-lg font-semibold text-cyber-accent mt-3">
+            Government Official Registration
+          </h2>
           <p className="text-xs text-cyber-muted mt-1">
             For pre-registered councillors, mayor, PEC, DDA, PSIP, DSIP, NGO, and open members
           </p>
@@ -132,101 +124,132 @@ export default function OfficialSignupPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-cyber-muted mb-1">NID (National Identification Number)</label>
-            <input
-              className="cyber-input"
-              value={form.nid}
-              onChange={(e) => update('nid', e.target.value.replace(/\D/g, '').slice(0, 10))}
-              onBlur={validatePreReg}
-              placeholder="1234567890"
-              inputMode="numeric"
-              maxLength={10}
-              required
-            />
-            {nidFeedback.text && (
-              <div className={`nid-feedback ${nidFeedback.type}`}>{nidFeedback.text}</div>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm text-cyber-muted mb-1">Pre-Registered Email</label>
-            <input
-              type="email"
-              className="cyber-input"
-              value={form.email}
-              onChange={(e) => update('email', e.target.value)}
-              onBlur={validatePreReg}
-              required
-            />
-          </div>
+        {step === 'verify' ? (
+          <form onSubmit={handleVerify} className="space-y-4">
+            <div>
+              <label className="block text-sm text-cyber-muted mb-1">
+                NID (National Identification Number)
+              </label>
+              <input
+                type="text"
+                className="cyber-input"
+                placeholder="Enter 10-digit NID"
+                value={formData.nid}
+                onChange={(e) => updateField('nid', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                inputMode="numeric"
+                maxLength={10}
+                required
+              />
+              <p className="text-xs text-cyber-muted mt-1">
+                NID must match what was provided to the administrator
+              </p>
+            </div>
 
-          {preRegRecord && (
-            <div className="p-4 rounded-lg bg-slate-bg border border-slate-border space-y-2 text-sm">
-              <p><span className="text-cyber-muted">Full Name:</span> {preRegRecord.fullName}</p>
-              <p><span className="text-cyber-muted">Role:</span> {ROLES[preRegRecord.role] ?? preRegRecord.role}</p>
-              {preRegRecord.position && (
-                <p><span className="text-cyber-muted">Position:</span> {preRegRecord.position}</p>
-              )}
-              {preRegRecord.ward && (
-                <p><span className="text-cyber-muted">Ward:</span> {preRegRecord.ward}</p>
+            <div>
+              <label className="block text-sm text-cyber-muted mb-1">Pre-Registered Email</label>
+              <input
+                type="email"
+                className="cyber-input"
+                placeholder="Enter your registered email"
+                value={formData.email}
+                onChange={(e) => updateField('email', e.target.value)}
+                required
+              />
+              <p className="text-xs text-cyber-muted mt-1">
+                Email must match what was provided to the administrator
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              className="cyber-btn-primary w-full"
+              disabled={loading || isValidating}
+            >
+              {isValidating ? 'Validating…' : loading ? 'Verifying…' : 'Verify Registration'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleRegister} className="space-y-4">
+            {preRegRecord && (
+              <div className="p-4 rounded-lg bg-slate-bg border border-slate-border space-y-1 text-sm">
+                <p className="text-status-completed font-medium">Pre-registration verified</p>
+                <p className="text-cyber-text font-medium">{preRegRecord.fullName}</p>
+                <p className="text-cyber-muted">
+                  Role: {ROLES[preRegRecord.role] ?? preRegRecord.role}
+                </p>
+                {preRegRecord.position && (
+                  <p className="text-cyber-muted">Position: {preRegRecord.position}</p>
+                )}
+                <p className="text-cyber-muted">
+                  Ward: {preRegRecord.wardNumber || preRegRecord.ward || 'N/A'}
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm text-cyber-muted mb-1">Password</label>
+              <input
+                type="password"
+                className="cyber-input"
+                placeholder="Create a strong password"
+                value={formData.password}
+                onChange={(e) => updateField('password', e.target.value)}
+                required
+              />
+              {formData.password && (
+                <ul className="mt-2 space-y-1">
+                  {Object.keys(PASSWORD_RULE_LABELS).map((key) => (
+                    <li
+                      key={key}
+                      className={`text-xs ${passwordCheck.rules[key] ? 'text-status-completed' : 'text-cyber-muted'}`}
+                    >
+                      {passwordCheck.rules[key] ? '✓' : '○'} {PASSWORD_RULE_LABELS[key]}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm text-cyber-muted mb-1">Password</label>
-            <input
-              type="password"
-              className="cyber-input"
-              value={form.password}
-              onChange={(e) => update('password', e.target.value)}
-              required
-            />
-            {form.password && (
-              <ul className="mt-2 space-y-1">
-                {Object.keys(PASSWORD_RULE_LABELS).map((key) => (
-                  <li
-                    key={key}
-                    className={`text-xs ${passwordCheck.rules[key] ? 'text-status-completed' : 'text-cyber-muted'}`}
-                  >
-                    {passwordCheck.rules[key] ? '✓' : '○'} {PASSWORD_RULE_LABELS[key]}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm text-cyber-muted mb-1">Confirm Password</label>
-            <input
-              type="password"
-              className="cyber-input"
-              value={form.confirmPassword}
-              onChange={(e) => update('confirmPassword', e.target.value)}
-              required
-            />
-          </div>
+            <div>
+              <label className="block text-sm text-cyber-muted mb-1">Confirm Password</label>
+              <input
+                type="password"
+                className="cyber-input"
+                placeholder="Confirm your password"
+                value={formData.confirmPassword}
+                onChange={(e) => updateField('confirmPassword', e.target.value)}
+                required
+              />
+            </div>
 
-          <label className="flex items-start gap-2 text-sm text-cyber-muted cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.acceptedTerms}
-              onChange={(e) => update('acceptedTerms', e.target.checked)}
-              className="mt-1 rounded border-slate-border"
-              required
-            />
-            <span>
-              I agree to the{' '}
-              <button type="button" className="text-cyber-accent hover:underline">
-                Terms &amp; Conditions
-              </button>
-            </span>
-          </label>
+            <label className="flex items-start gap-2 text-sm text-cyber-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.termsAccepted}
+                onChange={(e) => updateField('termsAccepted', e.target.checked)}
+                className="mt-1 rounded border-slate-border"
+                required
+              />
+              <span>I agree to the Terms &amp; Conditions of Community Connect Hub</span>
+            </label>
 
-          <button type="submit" className="cyber-btn-primary w-full" disabled={loading}>
-            {loading ? 'Creating…' : 'Complete Official Registration'}
-          </button>
-        </form>
+            <button type="submit" className="cyber-btn-primary w-full" disabled={loading}>
+              {loading ? 'Registering…' : 'Complete Official Registration'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep('verify');
+                setPreRegRecord(null);
+                setError('');
+              }}
+              className="cyber-btn-secondary w-full"
+            >
+              Back to Verification
+            </button>
+          </form>
+        )}
 
         <p className="text-center text-cyber-muted text-sm mt-6">
           Ward resident?{' '}
@@ -236,7 +259,9 @@ export default function OfficialSignupPage() {
         </p>
         <p className="text-center text-cyber-muted text-sm mt-2">
           Already registered?{' '}
-          <Link to="/login" className="text-cyber-accent hover:underline">Login</Link>
+          <Link to="/login" className="text-cyber-accent hover:underline">
+            Login
+          </Link>
         </p>
       </div>
     </div>

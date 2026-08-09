@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { PASSWORD_RULE_LABELS } from '../../constants';
 import { validatePassword } from '../../utils/validation';
-import { validateNID, checkNidExists, validateResidentRegistration } from '../../utils/validators';
+import { validateNID } from '../../utils/validators';
+import { checkNIDExists, checkNidInPreRegistered } from '../../services/authService';
 import Logo from '../../components/common/Logo';
 
 const RESIDENT_WARD_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
@@ -33,7 +34,7 @@ export default function SignupPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function handleNidBlur() {
+  async function handleNidBlur() {
     const nid = form.nid.trim();
     if (!nid) {
       setNidFeedback({ text: '', type: 'info' });
@@ -51,15 +52,22 @@ export default function SignupPage() {
       setNidFeedback({ text: 'NID must be exactly 10 digits.', type: 'invalid' });
       return;
     }
-    if (checkNidExists(nid)) {
-      setNidFeedback({ text: 'NID already registered.', type: 'invalid' });
-      return;
+    try {
+      if (await checkNIDExists(nid)) {
+        setNidFeedback({ text: 'NID already registered.', type: 'invalid' });
+        return;
+      }
+      if (await checkNidInPreRegistered(nid)) {
+        setNidFeedback({
+          text: 'You are a pre-registered official. Please use the official registration page.',
+          type: 'invalid',
+        });
+        return;
+      }
+      setNidFeedback({ text: 'NID is available for resident registration.', type: 'valid' });
+    } catch {
+      setNidFeedback({ text: 'Could not verify NID. Check your connection.', type: 'invalid' });
     }
-    const check = validateResidentRegistration({ nid });
-    setNidFeedback({
-      text: check.valid ? 'NID is available for resident registration.' : check.message,
-      type: check.valid ? 'valid' : 'invalid',
-    });
   }
 
   async function handleSubmit(e) {

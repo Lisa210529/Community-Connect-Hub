@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { PRE_REGISTER_ROLES, WARD_OPTIONS } from '../../constants';
+import { PRE_REGISTER_ROLES } from '../../constants';
+
+const WARD_OPTIONS = Array.from({ length: 10 }, (_, i) => `Ward ${i + 1}`);
 
 const EMPTY = {
   fullName: '',
@@ -7,10 +9,10 @@ const EMPTY = {
   email: '',
   role: 'councillor',
   position: '',
-  ward: WARD_OPTIONS[4] ?? '',
-  province: 'Madang Province',
-  district: 'Madang District',
-  llg: '',
+  ward: 'Ward 5',
+  province: 'Madang',
+  district: 'Madang',
+  llg: 'Madang Urban',
 };
 
 export default function PreRegisterForm({ onSubmit, loading }) {

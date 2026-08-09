@@ -1,57 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext';
 import { ROLES } from '../../constants';
-import { updateItem, addAuditLog } from '../../services/localStorageService';
+import {
+  fetchPendingResidents,
+  approveUser,
+  rejectUser,
+} from '../../services/authService';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Modal from '../../components/ui/Modal';
 
 export default function ApproveUsersPage() {
   const { user } = useAuth();
-  const { getData, refresh } = useData();
+  const [pending, setPending] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [rejectId, setRejectId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  const pending = (getData()?.users ?? [])
-    .filter((u) => !u.isApproved && u.role === 'resident')
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const loadPending = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const users = await fetchPendingResidents();
+      setPending(users);
+    } catch (err) {
+      setError(err.message ?? 'Failed to load pending users.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  function handleApprove(id) {
-    updateItem('users', id, {
-      isApproved: true,
-      isActive: true,
-      approvedBy: user?.id,
-      updatedAt: new Date().toISOString(),
-    });
-    const target = pending.find((u) => u.id === id);
-    addAuditLog(
-      'USER_APPROVED',
-      user?.name,
-      user?.role,
-      `Approved resident ${target?.name} (NID: ${target?.nid})`,
-    );
-    refresh();
+  useEffect(() => {
+    loadPending();
+  }, [loadPending]);
+
+  async function handleApprove(uid) {
+    try {
+      await approveUser(uid, user?.uid);
+      await loadPending();
+    } catch (err) {
+      setError(err.message ?? 'Failed to approve user.');
+    }
   }
 
-  function confirmReject() {
+  async function confirmReject() {
     if (!rejectId) return;
-    const target = pending.find((u) => u.id === rejectId);
-    updateItem('users', rejectId, {
-      isApproved: false,
-      isActive: false,
-      rejectionReason: rejectReason,
-      updatedAt: new Date().toISOString(),
-    });
-    addAuditLog(
-      'USER_REJECTED',
-      user?.name,
-      user?.role,
-      `Rejected ${target?.name}: ${rejectReason || 'No reason given'}`,
-    );
-    setRejectId(null);
-    setRejectReason('');
-    refresh();
+    try {
+      await rejectUser(rejectId, rejectReason);
+      setRejectId(null);
+      setRejectReason('');
+      await loadPending();
+    } catch (err) {
+      setError(err.message ?? 'Failed to reject user.');
+    }
   }
 
   return (
@@ -64,8 +66,16 @@ export default function ApproveUsersPage() {
         <p className="text-cyber-muted text-sm">{pending.length} residents awaiting approval</p>
       </div>
 
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
+          {error}
+        </div>
+      )}
+
       <div className="cyber-card overflow-x-auto">
-        {pending.length === 0 ? (
+        {loading ? (
+          <p className="text-cyber-muted text-center py-8">Loading…</p>
+        ) : pending.length === 0 ? (
           <p className="text-cyber-muted text-center py-8">No pending approvals.</p>
         ) : (
           <table className="w-full text-sm">
@@ -81,25 +91,25 @@ export default function ApproveUsersPage() {
             </thead>
             <tbody>
               {pending.map((u) => (
-                <tr key={u.id} className="border-b border-slate-border/50">
+                <tr key={u.uid} className="border-b border-slate-border/50">
                   <td className="py-3 pr-4 font-medium">{u.name}</td>
                   <td className="py-3 pr-4 font-mono">{u.nid}</td>
                   <td className="py-3 pr-4">{u.email}</td>
                   <td className="py-3 pr-4 text-cyber-muted">{u.ward}</td>
                   <td className="py-3 pr-4 text-cyber-muted">
-                    {new Date(u.createdAt).toLocaleDateString()}
+                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
                   </td>
                   <td className="py-3 space-x-2">
                     <button
                       type="button"
-                      onClick={() => handleApprove(u.id)}
+                      onClick={() => handleApprove(u.uid)}
                       className="cyber-btn-success text-xs"
                     >
                       Approve
                     </button>
                     <button
                       type="button"
-                      onClick={() => setRejectId(u.id)}
+                      onClick={() => setRejectId(u.uid)}
                       className="cyber-btn-danger text-xs"
                     >
                       Reject

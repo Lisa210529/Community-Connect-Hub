@@ -1,237 +1,137 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import INITIAL_DATA from '../data/mockData';
+import { ROLE_DASHBOARD_PATHS } from '../constants';
+import { validateNID } from '../utils/validators';
 import { isValidEmail } from '../utils/helpers';
 import {
-  initializeStorage,
-  getStore,
-  setCollection,
-  getSession,
-  setSession,
-  addAuditLog,
-  addItem,
-  updateItem,
-} from '../services/localStorageService';
-import { ROLE_DASHBOARD_PATHS } from '../constants';
-import {
-  validateNID,
-  checkNidExists,
-  checkNidInPreReg,
-  validateOfficialRegistration,
-  validateResidentRegistration,
-  getPreRegisteredUsers,
-} from '../utils/validators';
+  loginUser,
+  logoutUser,
+  registerUser,
+  registerResidentUser,
+  registerOfficialUser,
+  preRegisterOfficial,
+  subscribeToAuthChanges,
+  getUserData,
+  getCurrentUser,
+  updateUserProfile,
+} from '../services/authService';
 
 const AuthContext = createContext(null);
 
-function splitFullName(fullName) {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
-  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [firebaseUser, setFirebaseUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    initializeStorage(INITIAL_DATA);
-    const session = getSession();
-    if (session?.userId) {
-      const store = getStore();
-      const profile = store?.users?.find((u) => u.id === session.userId);
-      if (profile) setUser(profile);
+    let active = true;
+
+    async function loadUser() {
+      try {
+        const userData = await getCurrentUser();
+        if (active) {
+          setUser(userData);
+          setFirebaseUser(userData);
+        }
+      } catch {
+        if (active) {
+          setUser(null);
+          setFirebaseUser(null);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
     }
-    setLoading(false);
+
+    loadUser();
+
+    const unsubscribe = subscribeToAuthChanges(async (fbUser) => {
+      if (!fbUser) {
+        setUser(null);
+        setFirebaseUser(null);
+        return;
+      }
+      try {
+        const profile = await getUserData(fbUser.uid);
+        if (profile?.isApproved && profile?.isActive) {
+          setUser(profile);
+          setFirebaseUser(fbUser);
+        } else {
+          setUser(null);
+          setFirebaseUser(null);
+        }
+      } catch {
+        setUser(null);
+        setFirebaseUser(null);
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
-  const login = useCallback((identifier, password, rememberMe = false) => {
+  const login = useCallback(async (identifier, password) => {
     const email = identifier.trim();
     if (!isValidEmail(email)) throw new Error('Please enter a valid email address.');
     if (!password?.trim()) throw new Error('Please enter a password.');
-    const store = getStore();
-    const found = store.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (!found) throw new Error('No account found with this email.');
-    if (!found.isApproved) {
-      throw new Error('Your account is pending approval. Please wait for admin approval.');
-    }
-    if (!found.isActive) throw new Error('Your account is inactive.');
-    setUser(found);
-    setSession({ userId: found.id, rememberMe });
-    addAuditLog('LOGIN', found.name, found.role, `User ${found.email} logged in`);
-    return found;
+    const { profile } = await loginUser(email, password);
+    setUser(profile);
+    setFirebaseUser({ uid: profile.uid, email: profile.email });
+    return profile;
   }, []);
 
-  const registerResident = useCallback(({ fullName, email, nid, password, phone, ward, acceptedTerms }) => {
+  const registerResident = useCallback(
+    async ({ fullName, email, nid, password, phone, ward, acceptedTerms, firstName, lastName, wardNumber, wardId }) => {
+      if (!acceptedTerms) throw new Error('You must accept the Terms & Conditions.');
+      if (!validateNID(String(nid ?? '').replace(/\s/g, ''))) {
+        throw new Error('NID must be exactly 10 digits.');
+      }
+      if (!phone?.trim()) throw new Error('Phone number is required.');
+      if (!ward?.trim() && !wardId?.trim()) throw new Error('Please select your ward.');
+
+      const parts = fullName?.trim().split(/\s+/) ?? [];
+      return registerResidentUser({
+        firstName: firstName ?? parts[0] ?? '',
+        lastName: lastName ?? parts.slice(1).join(' ') ?? '',
+        fullName,
+        email,
+        nid,
+        password,
+        phone,
+        ward,
+        wardId: wardId ?? ward,
+        wardNumber: wardNumber ?? ward?.replace('ward', '') ?? '',
+        province: 'Madang',
+        district: 'Madang',
+        llg: 'Madang Urban',
+        role: 'resident',
+      });
+    },
+    [],
+  );
+
+  const registerOfficial = useCallback(async ({ email, nid, password, acceptedTerms }) => {
     if (!acceptedTerms) throw new Error('You must accept the Terms & Conditions.');
-    const normalizedNid = String(nid ?? '').replace(/\s/g, '');
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!validateNID(normalizedNid)) throw new Error('NID must be exactly 10 digits.');
-    if (!isValidEmail(normalizedEmail)) throw new Error('Please enter a valid email address.');
-    if (!fullName?.trim()) throw new Error('Please enter your full name.');
-    const store = getStore();
-    if (store.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
-      throw new Error('Email already registered.');
-    }
-    const residentCheck = validateResidentRegistration({ nid: normalizedNid });
-    if (!residentCheck.valid) throw new Error(residentCheck.message);
-    if (!phone?.trim()) throw new Error('Phone number is required.');
-    if (!ward?.trim()) throw new Error('Please select your ward.');
-
-    const wardNumber = ward.startsWith('ward') ? ward.replace('ward', '') : '';
-    const wardLabel = wardNumber ? `Ward ${wardNumber}` : ward.trim();
-    const wardRecord = store.wards?.find(
-      (w) => w.wardId === ward || w.wardName === ward || w.wardNumber === wardNumber,
-    );
-    const { firstName, lastName } = splitFullName(fullName);
-    const now = new Date().toISOString();
-    const newUser = {
-      id: `user_${Date.now()}`,
-      uid: `user_${Date.now()}`,
-      email: normalizedEmail,
-      password,
-      nid: normalizedNid,
-      role: 'resident',
-      firstName,
-      lastName,
-      name: fullName.trim(),
-      phone: phone.trim(),
-      ward: wardLabel,
-      wardId: wardRecord?.wardId ?? ward,
-      wardNumber: wardRecord?.wardNumber ?? wardNumber,
-      province: wardRecord?.province ?? 'Madang Province',
-      district: wardRecord?.district ?? '',
-      llg: wardRecord?.llg ?? '',
-      isApproved: false,
-      isRegistered: true,
-      isActive: true,
-      mfaEnabled: false,
-      createdAt: now,
-      registeredAt: now,
-    };
-    addItem('users', newUser);
-    addAuditLog('REGISTER', newUser.name, 'resident', `Resident registration pending: ${normalizedEmail}`);
-    return { user: newUser, needsApproval: true };
+    return registerOfficialUser({ email, nid, password });
   }, []);
 
-  const registerOfficial = useCallback(({ email, nid, password, acceptedTerms }) => {
-    if (!acceptedTerms) throw new Error('You must accept the Terms & Conditions.');
-    const normalizedNid = String(nid ?? '').replace(/\s/g, '');
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!validateNID(normalizedNid)) throw new Error('NID must be exactly 10 digits.');
-    if (!isValidEmail(normalizedEmail)) throw new Error('Please enter a valid email address.');
-    const store = getStore();
-    if (store.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
-      throw new Error('Email already registered.');
-    }
-    if (checkNidExists(normalizedNid)) {
-      throw new Error('NID already registered.');
-    }
-    const officialCheck = validateOfficialRegistration({ nid: normalizedNid, email: normalizedEmail });
-    if (!officialCheck.valid) throw new Error(officialCheck.message);
+  const preRegisterOfficialHandler = useCallback(
+    async (payload, adminUser) => preRegisterOfficial(payload, adminUser?.uid),
+    [],
+  );
 
-    const record = officialCheck.record;
-    const { firstName, lastName } = splitFullName(record.fullName);
-    const now = new Date().toISOString();
-    const newUser = {
-      id: `user_${Date.now()}`,
-      uid: `user_${Date.now()}`,
-      email: normalizedEmail,
-      password,
-      nid: normalizedNid,
-      role: record.role,
-      firstName,
-      lastName,
-      name: record.fullName,
-      phone: '',
-      ward: record.ward ?? '',
-      wardId: record.wardId ?? '',
-      wardNumber: record.wardNumber ?? '',
-      province: record.province ?? 'Madang Province',
-      district: record.district ?? '',
-      llg: record.llg ?? '',
-      position: record.position ?? '',
-      isApproved: true,
-      isRegistered: true,
-      isActive: true,
-      mfaEnabled: false,
-      createdAt: now,
-      registeredAt: now,
-    };
-    addItem('users', newUser);
-    updateItem('preRegisteredUsers', record.id ?? record.preRegId, {
-      isRegistered: true,
-      registeredAt: now,
-    });
-    addAuditLog(
-      'REGISTER',
-      newUser.name,
-      record.role,
-      `Official registration complete: ${normalizedEmail} (${record.position})`,
-    );
-    return { user: newUser, needsApproval: false };
-  }, []);
-
-  const preRegisterOfficial = useCallback((payload, adminUser) => {
-    const normalizedNid = String(payload.nid ?? '').replace(/\s/g, '');
-    if (!validateNID(normalizedNid)) throw new Error('NID must be exactly 10 digits.');
-    if (checkNidExists(normalizedNid)) throw new Error('NID already registered to a user.');
-    if (checkNidInPreReg(normalizedNid)) throw new Error('NID already in pre-registration list.');
-    const store = getStore();
-    if (getPreRegisteredUsers(store).some((o) => o.email.toLowerCase() === payload.email.trim().toLowerCase())) {
-      throw new Error('Email already in pre-registration list.');
-    }
-    const id = `pre-${Date.now()}`;
-    const record = {
-      preRegId: id,
-      id,
-      fullName: payload.fullName.trim(),
-      email: payload.email.trim().toLowerCase(),
-      nid: normalizedNid,
-      role: payload.role,
-      position: payload.position?.trim() ?? '',
-      ward: payload.ward?.trim() ?? '',
-      wardId: payload.wardId ?? '',
-      wardNumber: payload.wardNumber ?? '',
-      province: payload.province ?? 'Madang Province',
-      district: payload.district ?? '',
-      llg: payload.llg ?? '',
-      isRegistered: false,
-      createdBy: adminUser?.id ?? '',
-      createdAt: new Date().toISOString(),
-    };
-    addItem('preRegisteredUsers', record);
-    addAuditLog(
-      'PRE_REGISTER',
-      adminUser?.name ?? 'Admin',
-      adminUser?.role ?? 'system-admin',
-      `Pre-registered ${record.fullName} as ${record.role} (NID: ${normalizedNid})`,
-    );
-    return record;
-  }, []);
-
-  const logout = useCallback(() => {
-    if (user) addAuditLog('LOGOUT', user.name, user.role, 'User logged out');
+  const logout = useCallback(async () => {
+    await logoutUser();
     setUser(null);
-    setSession(null);
-  }, [user]);
+    setFirebaseUser(null);
+  }, []);
 
   const updateProfile = useCallback(
-    (updates) => {
-      if (!user) return;
-      const store = getStore();
-      const users = store.users.map((u) =>
-        u.id === user.id
-          ? {
-              ...u,
-              ...updates,
-              name: `${updates.firstName ?? u.firstName} ${updates.lastName ?? u.lastName}`.trim(),
-            }
-          : u,
-      );
-      setCollection('users', users);
-      const updated = users.find((u) => u.id === user.id);
+    async (updates) => {
+      if (!user?.uid) return;
+      const updated = await updateUserProfile(user.uid, updates);
       setUser(updated);
-      setSession({ userId: updated.id });
     },
     [user],
   );
@@ -242,13 +142,15 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
+        firebaseUser,
         role: user?.role,
         loading,
         isAuthenticated: !!user,
         login,
+        register: registerUser,
         registerResident,
         registerOfficial,
-        preRegisterOfficial,
+        preRegisterOfficial: preRegisterOfficialHandler,
         logout,
         updateProfile,
         dashboardPath,

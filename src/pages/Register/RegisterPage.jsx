@@ -1,258 +1,263 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import AuthLogo, { AuthFooterLink } from '../../components/common/AuthLogo';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   registerUser,
-  validateNidFromFirestore,
+  checkNIDExists,
+  checkEmailExists,
 } from '../../services/authService';
-import { validatePassword, validateEmail, validateNid } from '../../utils/validation';
-import { PASSWORD_RULE_LABELS, ROLES } from '../../constants';
+import { validatePassword } from '../../utils/validation';
+import { PASSWORD_RULE_LABELS } from '../../constants';
+import Logo from '../../components/common/Logo';
 
-const SELF_REGISTER_ROLES = [{ value: 'resident', label: ROLES.resident }];
+const RESIDENT_WARD_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
+  value: `ward${i + 1}`,
+  label: `Ward ${i + 1}`,
+  wardNumber: String(i + 1),
+}));
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    userId: '',
+  const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     nid: '',
+    phone: '',
+    wardId: '',
+    wardNumber: '',
+    ward: '',
+    province: 'Madang',
+    district: 'Madang',
+    llg: 'Madang Urban',
     role: 'resident',
     password: '',
     confirmPassword: '',
+    acceptedTerms: false,
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [nidFeedback, setNidFeedback] = useState({ text: '', type: 'info' });
-  const passwordCheck = validatePassword(form.password);
+  const passwordCheck = validatePassword(formData.password);
 
   function updateField(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleWardChange(wardValue) {
+    const option = RESIDENT_WARD_OPTIONS.find((w) => w.value === wardValue);
+    setFormData((prev) => ({
+      ...prev,
+      wardId: wardValue,
+      wardNumber: option?.wardNumber ?? '',
+      ward: option?.label ?? '',
+    }));
   }
 
   async function handleNidBlur() {
-    const nid = form.nid.trim();
-    if (!nid) {
-      setNidFeedback({ text: '', type: 'info' });
-      return;
+    const nid = formData.nid.trim();
+    if (!nid || nid.length !== 10) return;
+    try {
+      if (await checkNIDExists(nid)) {
+        setNidFeedback({ text: 'NID already registered.', type: 'invalid' });
+      } else {
+        setNidFeedback({ text: 'NID is available.', type: 'valid' });
+      }
+    } catch {
+      setNidFeedback({ text: 'Could not verify NID.', type: 'invalid' });
     }
-    if (!/^\d*$/.test(nid)) {
-      setNidFeedback({ text: 'Only numbers allowed.', type: 'invalid' });
-      return;
-    }
-    if (nid.length !== 10) {
-      setNidFeedback({ text: `Enter 10 digits (${nid.length}/10).`, type: 'info' });
-      return;
-    }
-
-    const result = await validateNidFromFirestore(nid);
-    setNidFeedback({
-      text: result.message,
-      type: result.valid ? 'valid' : 'invalid',
-    });
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-
-    if (!/^\d{6,10}$/.test(form.userId.trim())) {
-      setError('User ID must be 6–10 digits (e.g., 210529).');
-      return;
-    }
-    if (!validateEmail(form.email)) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-    if (!validateNid(form.nid)) {
-      setError('NID must be exactly 10 digits.');
-      return;
-    }
-    if (!passwordCheck.valid) {
-      setError(passwordCheck.message);
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
     setLoading(true);
+
     try {
-      await registerUser({
-        email: form.email.trim(),
-        password: form.password,
-        profile: {
-          userId: form.userId.trim(),
-          firstName: form.firstName.trim(),
-          lastName: form.lastName.trim(),
-          nid: form.nid.trim(),
-          role: form.role,
+      if (!/^\d{10}$/.test(formData.nid)) {
+        throw new Error('NID must be exactly 10 digits');
+      }
+      if (await checkNIDExists(formData.nid)) {
+        throw new Error('NID already registered. Please use a different NID.');
+      }
+      if (await checkEmailExists(formData.email)) {
+        throw new Error('Email already registered. Please use a different email.');
+      }
+      if (formData.password !== formData.confirmPassword) {
+        throw new Error('Passwords do not match');
+      }
+      if (!passwordCheck.valid) {
+        throw new Error(passwordCheck.message);
+      }
+      if (!formData.wardId) {
+        throw new Error('Please select your ward.');
+      }
+      if (!formData.acceptedTerms) {
+        throw new Error('You must accept the Terms & Conditions.');
+      }
+
+      await registerUser(formData);
+      navigate('/login', {
+        state: {
+          message:
+            'Registration successful! Your account is pending admin approval. You will be notified when approved.',
         },
       });
-
-      const approvalNote =
-        form.role === 'resident'
-          ? 'You can sign in now.'
-          : 'Await admin approval before signing in.';
-
-      navigate('/login', {
-        state: { message: `Registration successful. ${approvalNote}` },
-      });
     } catch (err) {
-      setError(err.message ?? 'Registration failed. Please try again.');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="auth-card">
-      <AuthLogo />
-
-      {error && <div className="alert alert-danger">{error}</div>}
-
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="userId">
-            <i className="fas fa-id-badge me-2" />
-            User ID
-          </label>
-          <input
-            id="userId"
-            className="form-control"
-            value={form.userId}
-            onChange={(e) => updateField('userId', e.target.value.replace(/\D/g, ''))}
-            placeholder="e.g., 210529"
-            maxLength={10}
-            required
-          />
-          <div className="form-text">Your student or assigned system ID (6–10 digits).</div>
+    <div className="min-h-screen bg-slate-bg flex items-center justify-center p-4">
+      <div className="cyber-card w-full max-w-lg shadow-glow">
+        <div className="flex flex-col items-center text-center mb-6">
+          <Logo />
+          <p className="text-cyber-muted text-sm mt-3">Resident Registration</p>
         </div>
 
-        <div className="row g-2">
-          <div className="col-md-6 form-group">
-            <label htmlFor="firstName">First Name</label>
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-cyber-muted mb-1">First Name</label>
+              <input
+                className="cyber-input"
+                value={formData.firstName}
+                onChange={(e) => updateField('firstName', e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-cyber-muted mb-1">Last Name</label>
+              <input
+                className="cyber-input"
+                value={formData.lastName}
+                onChange={(e) => updateField('lastName', e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-cyber-muted mb-1">NID (10 digits)</label>
             <input
-              id="firstName"
-              className="form-control"
-              value={form.firstName}
-              onChange={(e) => updateField('firstName', e.target.value)}
+              className="cyber-input"
+              value={formData.nid}
+              onChange={(e) => updateField('nid', e.target.value.replace(/\D/g, '').slice(0, 10))}
+              onBlur={handleNidBlur}
+              maxLength={10}
+              required
+            />
+            {nidFeedback.text && (
+              <div className={`nid-feedback ${nidFeedback.type}`}>{nidFeedback.text}</div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm text-cyber-muted mb-1">Email</label>
+            <input
+              type="email"
+              className="cyber-input"
+              value={formData.email}
+              onChange={(e) => updateField('email', e.target.value)}
               required
             />
           </div>
-          <div className="col-md-6 form-group">
-            <label htmlFor="lastName">Last Name</label>
+
+          <div>
+            <label className="block text-sm text-cyber-muted mb-1">Phone</label>
             <input
-              id="lastName"
-              className="form-control"
-              value={form.lastName}
-              onChange={(e) => updateField('lastName', e.target.value)}
+              type="tel"
+              className="cyber-input"
+              value={formData.phone}
+              onChange={(e) => updateField('phone', e.target.value)}
               required
             />
           </div>
-        </div>
 
-        <div className="form-group">
-          <label htmlFor="nid">
-            <i className="fas fa-id-card me-2" />
-            National ID (NID)
-          </label>
-          <input
-            id="nid"
-            className="form-control"
-            value={form.nid}
-            onChange={(e) => updateField('nid', e.target.value.replace(/\D/g, ''))}
-            onBlur={handleNidBlur}
-            placeholder="10-digit NID"
-            maxLength={10}
-            required
-          />
-          {nidFeedback.text && (
-            <div className={`nid-feedback ${nidFeedback.type}`}>{nidFeedback.text}</div>
-          )}
-          <div className="form-text">
-            Your NID must exist in the national registry. Each NID can only be registered once.
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            className="form-control"
-            value={form.email}
-            onChange={(e) => updateField('email', e.target.value)}
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="role">
-            <i className="fas fa-user-tag me-2" />
-            Role
-          </label>
-          <select
-            id="role"
-            className="form-select"
-            value={form.role}
-            onChange={(e) => updateField('role', e.target.value)}
-          >
-            {SELF_REGISTER_ROLES.map(({ value, label }) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <div className="form-text">
-            Other roles (Councillor, WDC, Admin) are assigned by an administrator after registration.
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            className="form-control"
-            value={form.password}
-            onChange={(e) => updateField('password', e.target.value)}
-            required
-          />
-          {form.password && (
-            <ul className="list-unstyled mt-2 mb-0">
-              {Object.keys(PASSWORD_RULE_LABELS).map((key) => (
-                <li
-                  key={key}
-                  className={`nid-feedback ${passwordCheck.rules[key] ? 'valid' : 'invalid'}`}
-                >
-                  {passwordCheck.rules[key] ? '✓' : '○'} {PASSWORD_RULE_LABELS[key]}
-                </li>
+          <div>
+            <label className="block text-sm text-cyber-muted mb-1">Ward</label>
+            <select
+              className="cyber-select"
+              value={formData.wardId}
+              onChange={(e) => handleWardChange(e.target.value)}
+              required
+            >
+              <option value="">Select Ward</option>
+              {RESIDENT_WARD_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
               ))}
-            </ul>
-          )}
-        </div>
+            </select>
+          </div>
 
-        <div className="form-group">
-          <label htmlFor="confirmPassword">Confirm Password</label>
-          <input
-            id="confirmPassword"
-            type="password"
-            className="form-control"
-            value={form.confirmPassword}
-            onChange={(e) => updateField('confirmPassword', e.target.value)}
-            required
-          />
-        </div>
+          <div>
+            <label className="block text-sm text-cyber-muted mb-1">Password</label>
+            <input
+              type="password"
+              className="cyber-input"
+              value={formData.password}
+              onChange={(e) => updateField('password', e.target.value)}
+              required
+            />
+            {formData.password && (
+              <ul className="mt-2 space-y-1">
+                {Object.keys(PASSWORD_RULE_LABELS).map((key) => (
+                  <li
+                    key={key}
+                    className={`text-xs ${passwordCheck.rules[key] ? 'text-status-completed' : 'text-cyber-muted'}`}
+                  >
+                    {passwordCheck.rules[key] ? '✓' : '○'} {PASSWORD_RULE_LABELS[key]}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? 'Creating account…' : 'Create Account'}
-        </button>
-      </form>
+          <div>
+            <label className="block text-sm text-cyber-muted mb-1">Confirm Password</label>
+            <input
+              type="password"
+              className="cyber-input"
+              value={formData.confirmPassword}
+              onChange={(e) => updateField('confirmPassword', e.target.value)}
+              required
+            />
+          </div>
 
-      <AuthFooterLink text="Already have an account?" linkText="Sign In" to="/login" />
+          <label className="flex items-start gap-2 text-sm text-cyber-muted cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.acceptedTerms}
+              onChange={(e) => updateField('acceptedTerms', e.target.checked)}
+              className="mt-1 rounded border-slate-border"
+              required
+            />
+            <span>I agree to the Terms &amp; Conditions</span>
+          </label>
+
+          <button type="submit" className="cyber-btn-primary w-full" disabled={loading}>
+            {loading ? 'Creating account…' : 'Register as Resident'}
+          </button>
+        </form>
+
+        <p className="text-center text-cyber-muted text-sm mt-6">
+          Already registered?{' '}
+          <Link to="/login" className="text-cyber-accent hover:underline">Sign In</Link>
+        </p>
+        <p className="text-center text-cyber-muted text-sm mt-2">
+          Pre-registered government official?{' '}
+          <Link to="/official-register" className="text-cyber-accent hover:underline">
+            Complete official registration
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
