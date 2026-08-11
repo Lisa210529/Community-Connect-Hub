@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { hasAnyRole } from '../../constants/roleMapping';
 import { useData } from '../../context/DataContext';
 import { addItem, updateItem } from '../../services/localStorageService';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -10,7 +11,7 @@ export default function ResolutionsPage() {
   const { getData, refresh } = useData();
   const resolutions = getData()?.resolutions ?? [];
   const meetings = getData()?.meetings ?? [];
-  const canManage = ['wdc_chairman', 'councillor'].includes(user?.role);
+  const canManage = hasAnyRole(user?.role, ['wdc-member', 'councillor']);
 
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ title: '', meetingId: '', description: '' });

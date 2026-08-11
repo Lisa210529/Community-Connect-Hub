@@ -1,21 +1,57 @@
-import QuickActions from '../../components/ui/QuickActions';
-import StatusBadge from '../../components/ui/StatusBadge';
-import { useData } from '../../context/DataContext';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { updateItem } from '../../services/localStorageService';
+import ProfilePage from '../Profile/ProfilePage';
+import StatCard from '../../components/ui/StatCard';
+import StatusBadge from '../../components/ui/StatusBadge';
+import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
+import Modal from '../../components/ui/Modal';
+import ProposalFormModal from '../../components/Councillor/ProposalFormModal';
+import { firestoreService, loadHybridCollection } from '../../services/firestoreService';
+import {
+  getWardNumber,
+  resolveWardId,
+  matchesWard,
+  normalizeRequestStatus,
+  LETTER_TYPES,
+} from '../../utils/wdcHelpers';
+
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: 'fa-th-large' },
+  { id: 'projects', label: 'Projects', icon: 'fa-folder-open' },
+  { id: 'requests', label: 'Requests', icon: 'fa-inbox' },
+  { id: 'announcements', label: 'Announcements', icon: 'fa-bullhorn' },
+  { id: 'letters', label: 'Letters', icon: 'fa-file-alt' },
+  { id: 'profile', label: 'Profile', icon: 'fa-user' },
+];
 
 const SCORECARD_CATEGORIES = [
   { key: 'engagement', label: 'Community Engagement', icon: 'fa-users' },
   { key: 'delivery', label: 'Project Delivery', icon: 'fa-tasks' },
   { key: 'response', label: 'Request Response', icon: 'fa-reply' },
-  { key: 'wdc', label: 'WDC Participation', icon: 'fa-handshake' },
-  { key: 'transparency', label: 'Transparency & Reporting', icon: 'fa-file-alt' },
+  { key: 'proposals', label: 'Proposals Submitted', icon: 'fa-file-signature' },
+  { key: 'transparency', label: 'Transparency', icon: 'fa-file-alt' },
 ];
 
-function matchesWard(itemWard, userWard) {
-  if (!userWard) return true;
-  if (!itemWard) return false;
-  return itemWard === userWard || itemWard.includes(userWard) || userWard.includes(itemWard);
+const EMPTY_ANNOUNCEMENT = {
+  title: '',
+  content: '',
+  priority: 'medium',
+  targetAudience: 'ward_only',
+};
+
+const EMPTY_LETTER = {
+  content: '',
+  attachments: '',
+};
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-PG', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 function StarRating({ rating, max = 5 }) {
@@ -24,181 +60,839 @@ function StarRating({ rating, max = 5 }) {
       {Array.from({ length: max }, (_, i) => (
         <i
           key={i}
-          className={`fas fa-star text-sm ${
-            i < rating ? 'text-cyber-accent' : 'text-slate-border'
-          }`}
+          className={`fas fa-star text-sm ${i < rating ? 'text-cyber-accent' : 'text-slate-border'}`}
         />
       ))}
     </div>
   );
 }
 
-function computeScorecard(data, ward) {
-  const projects = (data?.projects ?? []).filter((p) => matchesWard(p.ward, ward));
-  const requests = (data?.requests ?? []).filter((r) => matchesWard(r.ward, ward));
-  const meetings = (data?.meetings ?? []).filter((m) => matchesWard(m.ward, ward));
-  const announcements = (data?.announcements ?? []).filter(
-    (a) => matchesWard(a.ward, ward) && a.createdBy,
-  );
+async function loadWardCollection(collectionName, user, fetchAllFn) {
+  const result = await loadHybridCollection(collectionName, fetchAllFn);
+  return {
+    ...result,
+    data: result.data.filter((item) => matchesWard(item, user)),
+  };
+}
 
+function computeScorecard(projects, communityNeeds, proposals, announcements) {
   const completedProjects = projects.filter((p) => p.status === 'Completed').length;
   const delivery =
     projects.length === 0 ? 3 : Math.min(5, Math.round((completedProjects / projects.length) * 5) + 2);
 
-  const resolvedRequests = requests.filter((r) =>
-    ['Resolved', 'In Progress'].includes(r.status),
+  const forwarded = communityNeeds.filter(
+    (n) => normalizeRequestStatus(n.status) === 'forwarded_to_councillor',
   ).length;
-  const response =
-    requests.length === 0 ? 4 : Math.min(5, Math.round((resolvedRequests / requests.length) * 5));
+  const response = forwarded === 0 ? 4 : Math.min(5, 3 + forwarded);
 
-  const completedMeetings = meetings.filter((m) => m.status === 'Completed').length;
-  const wdc = meetings.length === 0 ? 4 : Math.min(5, Math.round((completedMeetings / meetings.length) * 5));
-
-  const engagement = Math.min(5, 3 + Math.floor(requests.length / 3));
+  const proposalsCount = proposals.length;
+  const engagement = Math.min(5, 3 + Math.floor(proposalsCount / 2));
   const transparency = Math.min(5, 2 + announcements.length);
 
-  const ratings = {
-    engagement,
-    delivery,
-    response,
-    wdc,
-    transparency,
-  };
-
-  const overall = (
-    Object.values(ratings).reduce((sum, r) => sum + r, 0) / SCORECARD_CATEGORIES.length
-  ).toFixed(1);
-
+  const ratings = { engagement, delivery, response, proposals: Math.min(5, 2 + proposalsCount), transparency };
+  const overall = (Object.values(ratings).reduce((sum, r) => sum + r, 0) / SCORECARD_CATEGORIES.length).toFixed(1);
   return { ratings, overall };
-}
-
-function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('en-PG', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 }
 
 export default function CouncillorDashboard() {
   const { user } = useAuth();
-  const { getData, refresh } = useData();
-  const data = getData();
+  const navigate = useNavigate();
+  const { tab: tabParam } = useParams();
+  const [searchParams] = useSearchParams();
 
-  const ward = user?.ward ?? '';
-  const { ratings, overall } = computeScorecard(data, ward);
+  const wardNumber = getWardNumber(user);
+  const wardId = resolveWardId(user);
+  const ward = user?.ward ?? `Ward ${wardNumber}`;
 
-  const pendingRequests = (data?.requests ?? [])
-    .filter((r) => matchesWard(r.ward, ward) && r.status === 'Pending')
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const VALID_TABS = new Set(['overview', 'projects', 'requests', 'announcements', 'letters', 'profile']);
+  const queryTab = searchParams.get('tab');
+  const activeTab = tabParam && VALID_TABS.has(tabParam) ? tabParam : queryTab && VALID_TABS.has(queryTab) ? queryTab : 'overview';
 
-  const loggedProjects = (data?.projects ?? []).filter((p) => matchesWard(p.ward, ward)).length;
+  useEffect(() => {
+    if (queryTab && VALID_TABS.has(queryTab) && !tabParam) {
+      const path = queryTab === 'overview' ? '/dashboard/councillor' : `/dashboard/councillor/${queryTab}`;
+      navigate(path, { replace: true });
+    }
+  }, [queryTab, tabParam, navigate]);
 
-  function handleRequestAction(id, status) {
-    updateItem('requests', id, { status });
-    refresh();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [dataSource, setDataSource] = useState('firestore');
+  const [projects, setProjects] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [communityNeeds, setCommunityNeeds] = useState([]);
+  const [proposals, setProposals] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [letters, setLetters] = useState([]);
+
+  const [reviewNeed, setReviewNeed] = useState(null);
+  const [relatedRequests, setRelatedRequests] = useState([]);
+  const [returnModal, setReturnModal] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [proposalModal, setProposalModal] = useState(false);
+  const [announcementModal, setAnnouncementModal] = useState(false);
+  const [announcementForm, setAnnouncementForm] = useState(EMPTY_ANNOUNCEMENT);
+  const [letterModal, setLetterModal] = useState(false);
+  const [letterRequest, setLetterRequest] = useState(null);
+  const [letterForm, setLetterForm] = useState(EMPTY_LETTER);
+  const [saving, setSaving] = useState(false);
+
+  const forwardedNeeds = useMemo(
+    () =>
+      communityNeeds.filter(
+        (n) => normalizeRequestStatus(n.status) === 'forwarded_to_councillor',
+      ),
+    [communityNeeds],
+  );
+
+  const letterRequests = useMemo(
+    () =>
+      requests.filter(
+        (r) =>
+          String(r.requestType ?? '').toLowerCase() === 'letter' &&
+          normalizeRequestStatus(r.status) === 'pending',
+      ),
+    [requests],
+  );
+
+  const scorecard = useMemo(
+    () => computeScorecard(projects, communityNeeds, proposals, announcements),
+    [projects, communityNeeds, proposals, announcements],
+  );
+
+  const loadDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [projResult, reqResult, needsResult, propResult, annResult, letterResult] =
+        await Promise.all([
+          loadWardCollection('projects', user, () => firestoreService.getProjects()),
+          loadWardCollection('requests', user, () => firestoreService.getRequests()),
+          loadWardCollection('communityNeeds', user, () => firestoreService.getCommunityNeeds()),
+          loadWardCollection('projectProposals', user, () => firestoreService.getProjectProposals()),
+          loadWardCollection('announcements', user, () => firestoreService.getAnnouncements()),
+          loadWardCollection('letters', user, () => firestoreService.getLetters()),
+        ]);
+
+      setProjects(projResult.data);
+      setRequests(reqResult.data);
+      setCommunityNeeds(needsResult.data);
+      setProposals(propResult.data);
+      setAnnouncements(annResult.data);
+      setLetters(letterResult.data);
+
+      const sources = new Set([
+        projResult.dataSource,
+        reqResult.dataSource,
+        needsResult.dataSource,
+        propResult.dataSource,
+        annResult.dataSource,
+        letterResult.dataSource,
+      ]);
+      if (sources.has('mixed') || sources.size > 1) setDataSource('mixed');
+      else if (sources.has('localstorage')) setDataSource('localstorage');
+      else setDataSource('firestore');
+    } catch (err) {
+      setError(err.message || 'Failed to load dashboard data.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  function setTab(tabId) {
+    if (tabId === 'overview') navigate('/dashboard/councillor');
+    else navigate(`/dashboard/councillor/${tabId}`);
   }
 
-  const quickActions = [
-    { label: 'Log Project', to: '/projects', icon: 'fa-plus-circle' },
-    { label: 'Manage Requests', to: '/requests', icon: 'fa-inbox' },
-    { label: 'Meeting Schedule', to: '/meetings', icon: 'fa-calendar' },
-    { label: 'Document Generator', to: '/documents', icon: 'fa-file-pdf' },
-    { label: 'Post Announcements', to: '/announcements', icon: 'fa-bullhorn' },
-  ];
+  async function openReview(need) {
+    setReviewNeed(need);
+    const related = requests.filter((r) => (need.requestIds ?? []).includes(r.id));
+    setRelatedRequests(related);
+  }
 
-  return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-cyber-accent">Councillor Dashboard</h1>
-        <p className="text-cyber-muted text-sm mt-1">
-          {ward || 'Your ward'} · {loggedProjects} logged projects · {pendingRequests.length} pending
-          requests
-        </p>
-      </header>
+  function startProposal() {
+    if (!reviewNeed) return;
+    setProposalModal(true);
+  }
 
-      <section>
-        <h2 className="text-sm font-semibold text-cyber-muted uppercase tracking-wide mb-3">
-          Quick Actions
-        </h2>
-        <QuickActions actions={quickActions} />
-      </section>
+  async function handleReturnToWdc() {
+    if (!reviewNeed || !returnReason.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      await firestoreService.updateCommunityNeed(reviewNeed.id, {
+        status: 'returned_to_wdc',
+        returnReason: returnReason.trim(),
+        returnedAt: new Date().toISOString(),
+        returnedBy: user?.uid ?? user?.id,
+      });
 
-      <section className="cyber-card">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h2 className="text-lg font-semibold text-cyber-text">Performance Scorecard</h2>
-            <p className="text-sm text-cyber-muted">Ward performance across five key categories</p>
-          </div>
-          <div className="text-center sm:text-right">
-            <p className="text-xs text-cyber-muted uppercase tracking-wide">Overall Rating</p>
-            <p className="text-3xl font-bold text-cyber-accent">{overall}</p>
-            <StarRating rating={Math.round(Number(overall))} />
-          </div>
+      if (reviewNeed.forwardedBy) {
+        await firestoreService.createNotification({
+          userId: reviewNeed.forwardedBy,
+          type: 'community_need_returned',
+          title: 'Community Need returned by Councillor',
+          message: `${reviewNeed.category} (${reviewNeed.zone}) was returned: ${returnReason.trim()}`,
+          wardId,
+        });
+      }
+
+      setSuccessMessage('Community need returned to WDC.');
+      setReturnModal(false);
+      setReturnReason('');
+      setReviewNeed(null);
+      await loadDashboardData();
+    } catch (err) {
+      setError(err.message || 'Failed to return community need.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSubmitProposal(proposalData) {
+    if (!reviewNeed) return;
+    setSaving(true);
+    setError('');
+    try {
+      const mayor = await firestoreService.findMayor();
+      const mayorId = mayor?.uid ?? mayor?.id ?? null;
+
+      await firestoreService.createProjectProposal({
+        ...proposalData,
+        councillorId: user?.uid ?? user?.id,
+      });
+
+      await firestoreService.updateCommunityNeed(reviewNeed.id, {
+        status: 'proposal_submitted_to_mayor',
+        councillorId: user?.uid ?? user?.id,
+        proposalSubmittedAt: new Date().toISOString(),
+        proposalFileName: proposalData.proposalFileName,
+        hasProposalAttachment: Boolean(proposalData.proposalFileData || proposalData.proposalFileUrl),
+      });
+
+      if (mayorId) {
+        await firestoreService.createNotification({
+          userId: mayorId,
+          type: 'proposal_submitted',
+          title: 'New Project Proposal Submitted',
+          message: `${proposalData.category} proposal (${proposalData.proposalFileName}) submitted for review.`,
+          wardId,
+          communityNeedId: reviewNeed.id,
+          proposalId: proposalData.communityNeedId,
+        });
+      }
+
+      setSuccessMessage('Proposal document submitted to Mayor.');
+      setProposalModal(false);
+      setReviewNeed(null);
+      await loadDashboardData();
+    } catch (err) {
+      setError(err.message || 'Failed to submit proposal.');
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateAnnouncement(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await firestoreService.createAnnouncement({
+        id: `ann_${Date.now()}`,
+        title: announcementForm.title,
+        content: announcementForm.content,
+        priority: announcementForm.priority,
+        targetAudience: announcementForm.targetAudience,
+        type: announcementForm.targetAudience === 'ward_only' ? 'ward_only' : 'public',
+        ward,
+        wardId,
+        createdBy: user?.name,
+        createdAt: new Date().toISOString(),
+        isActive: true,
+      });
+      setSuccessMessage('Announcement posted successfully.');
+      setAnnouncementModal(false);
+      setAnnouncementForm(EMPTY_ANNOUNCEMENT);
+      await loadDashboardData();
+    } catch (err) {
+      setError(err.message || 'Failed to create announcement.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openLetterForm(req) {
+    setLetterRequest(req);
+    setLetterForm({
+      content: `Dear Sir/Madam,\n\nRe: ${req.category} for ${req.residentName}\n\n${req.description}\n\nYours faithfully,\n${user?.name}\nWard Councillor – ${ward}`,
+      attachments: '',
+    });
+    setLetterModal(true);
+  }
+
+  async function handleCreateLetter(e) {
+    e.preventDefault();
+    if (!letterRequest) return;
+    setSaving(true);
+    setError('');
+    try {
+      await firestoreService.createLetter({
+        residentId: letterRequest.residentId,
+        residentName: letterRequest.residentName,
+        requestId: letterRequest.id,
+        letterType: letterRequest.letterType || 'reference',
+        content: letterForm.content,
+        attachments: letterForm.attachments ? [letterForm.attachments] : [],
+        status: 'completed',
+        councillorId: user?.uid ?? user?.id,
+        wardId,
+        createdAt: new Date().toISOString(),
+        sentAt: new Date().toISOString(),
+      });
+
+      await firestoreService.updateRequest(letterRequest.id, { status: 'completed' });
+
+      if (letterRequest.residentId) {
+        await firestoreService.createNotification({
+          userId: letterRequest.residentId,
+          type: 'letter_ready',
+          title: 'Your letter is ready',
+          message: `Your ${letterRequest.category} has been prepared by the Ward Councillor.`,
+          wardId,
+        });
+      }
+
+      setSuccessMessage('Letter created and resident notified.');
+      setLetterModal(false);
+      setLetterRequest(null);
+      setLetterForm(EMPTY_LETTER);
+      await loadDashboardData();
+    } catch (err) {
+      setError(err.message || 'Failed to create letter.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function renderOverview() {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Ward Projects" value={projects.length} icon="fa-folder-open" />
+          <StatCard label="Forwarded Needs" value={forwardedNeeds.length} icon="fa-inbox" />
+          <StatCard label="Proposals to Mayor" value={proposals.length} icon="fa-file-signature" />
+          <StatCard label="Pending Letters" value={letterRequests.length} icon="fa-file-alt" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {SCORECARD_CATEGORIES.map(({ key, label, icon }) => (
-            <div
-              key={key}
-              className="p-4 rounded-lg bg-slate-bg border border-slate-border"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <i className={`fas ${icon} text-cyber-accent`} />
-                <p className="text-sm font-medium text-cyber-text">{label}</p>
-              </div>
-              <StarRating rating={ratings[key]} />
-              <p className="text-xs text-cyber-muted mt-2">{ratings[key]} / 5 stars</p>
+
+        <section className="cyber-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-lg font-semibold text-cyber-text">Performance Scorecard</h2>
+              <p className="text-sm text-cyber-muted">Ward performance across key categories</p>
             </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="cyber-card">
-        <h2 className="text-lg font-semibold text-cyber-text mb-4">Pending Requests</h2>
-        {pendingRequests.length === 0 ? (
-          <p className="text-cyber-muted text-sm">No pending requests for your ward.</p>
-        ) : (
-          <div className="space-y-3">
-            {pendingRequests.map((req) => (
-              <div
-                key={req.id}
-                className="p-4 rounded-lg bg-slate-bg border border-slate-border"
-              >
-                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-cyber-text">{req.category}</p>
-                      <StatusBadge status={req.status} />
-                    </div>
-                    <p className="text-sm text-cyber-muted mt-1">{req.description}</p>
-                    <p className="text-xs text-cyber-muted mt-2">
-                      {req.residentName} · {formatDate(req.createdAt)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleRequestAction(req.id, 'In Progress')}
-                      className="cyber-btn-success text-sm"
-                    >
-                      <i className="fas fa-check mr-1.5" />
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRequestAction(req.id, 'Rejected')}
-                      className="cyber-btn-danger text-sm"
-                    >
-                      <i className="fas fa-times mr-1.5" />
-                      Reject
-                    </button>
-                  </div>
+            <div className="text-center sm:text-right">
+              <p className="text-xs text-cyber-muted uppercase tracking-wide">Overall Rating</p>
+              <p className="text-3xl font-bold text-cyber-accent">{scorecard.overall}</p>
+              <StarRating rating={Math.round(Number(scorecard.overall))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {SCORECARD_CATEGORIES.map(({ key, label, icon }) => (
+              <div key={key} className="p-4 rounded-lg bg-slate-bg border border-slate-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <i className={`fas ${icon} text-cyber-accent`} />
+                  <p className="text-sm font-medium text-cyber-text">{label}</p>
                 </div>
+                <StarRating rating={scorecard.ratings[key]} />
+                <p className="text-xs text-cyber-muted mt-2">{scorecard.ratings[key]} / 5 stars</p>
               </div>
             ))}
           </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderProjects() {
+    return (
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-cyber-text">Ward Projects</h2>
+          <p className="text-sm text-cyber-muted">Projects with funding source, budget, and status</p>
+        </div>
+        <div className="cyber-card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-cyber-muted border-b border-slate-border text-left">
+                <th className="pb-3 pr-4">Name</th>
+                <th className="pb-3 pr-4">Category</th>
+                <th className="pb-3 pr-4">Status</th>
+                <th className="pb-3 pr-4">Budget</th>
+                <th className="pb-3 pr-4">Funding</th>
+                <th className="pb-3 pr-4">Location</th>
+                <th className="pb-3 pr-4">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-cyber-muted">
+                    No projects found for this ward.
+                  </td>
+                </tr>
+              )}
+              {projects.map((p) => (
+                <tr key={p.id} className="border-b border-slate-border/50 hover:bg-slate-bg/50">
+                  <td className="py-3 pr-4 font-medium">{p.name}</td>
+                  <td className="py-3 pr-4 text-cyber-muted">{p.category}</td>
+                  <td className="py-3 pr-4">
+                    <StatusBadge status={p.status} />
+                  </td>
+                  <td className="py-3 pr-4">K{p.budget?.toLocaleString?.() ?? '—'}</td>
+                  <td className="py-3 pr-4 text-cyber-muted">{p.fundingSource}</td>
+                  <td className="py-3 pr-4 text-cyber-muted">{p.location}</td>
+                  <td className="py-3 pr-4 text-cyber-muted">{formatDate(p.dateLogged)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  }
+
+  function renderRequests() {
+    return (
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-cyber-text">Community Needs Forwarded by WDC</h2>
+          <p className="text-sm text-cyber-muted">Review grouped resident requests and prepare proposals</p>
+        </div>
+        {forwardedNeeds.length === 0 ? (
+          <div className="cyber-card text-center py-10">
+            <p className="text-cyber-muted text-sm">No community needs forwarded from WDC yet.</p>
+          </div>
+        ) : (
+          <div className="cyber-card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-cyber-muted border-b border-slate-border text-left">
+                  <th className="pb-3 pr-4">Category</th>
+                  <th className="pb-3 pr-4">Zone</th>
+                  <th className="pb-3 pr-4">Residents</th>
+                  <th className="pb-3 pr-4">Ward</th>
+                  <th className="pb-3 pr-4">Status</th>
+                  <th className="pb-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forwardedNeeds.map((need) => (
+                  <tr key={need.id} className="border-b border-slate-border/50 hover:bg-slate-bg/50">
+                    <td className="py-3 pr-4 font-medium">{need.category}</td>
+                    <td className="py-3 pr-4 text-cyber-muted">{need.zone || 'All Ward'}</td>
+                    <td className="py-3 pr-4">{need.residentCount ?? need.residentIds?.length ?? 0}</td>
+                    <td className="py-3 pr-4 text-cyber-muted">{need.ward || ward}</td>
+                    <td className="py-3 pr-4">
+                      <StatusBadge status="Forwarded to Councillor" />
+                    </td>
+                    <td className="py-3">
+                      <button
+                        type="button"
+                        onClick={() => openReview(need)}
+                        className="cyber-btn-primary text-xs py-1.5 px-3"
+                      >
+                        Review
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
+    );
+  }
+
+  function renderAnnouncements() {
+    return (
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-cyber-text">Announcements</h2>
+            <p className="text-sm text-cyber-muted">Create and view ward announcements</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAnnouncementModal(true)}
+            className="cyber-btn-primary text-sm"
+          >
+            <i className="fas fa-bullhorn mr-2" />
+            Create Announcement
+          </button>
+        </div>
+        <div className="space-y-3">
+          {announcements.filter((a) => a.isActive !== false).length === 0 && (
+            <div className="cyber-card text-center py-10">
+              <p className="text-cyber-muted text-sm">No active announcements.</p>
+            </div>
+          )}
+          {announcements
+            .filter((a) => a.isActive !== false)
+            .map((a) => (
+              <div key={a.id} className="cyber-card">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold">{a.title}</h3>
+                  <StatusBadge status={a.priority} />
+                </div>
+                <p className="text-sm text-cyber-muted">{a.content}</p>
+                <p className="text-xs text-cyber-muted mt-2">
+                  {a.ward} · {formatDate(a.createdAt)} · {a.createdBy}
+                </p>
+              </div>
+            ))}
+        </div>
+      </section>
+    );
+  }
+
+  function renderLetters() {
+    return (
+      <section className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-cyber-text">Reference &amp; Support Letters</h2>
+          <p className="text-sm text-cyber-muted">Review resident letter requests and create official letters</p>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-cyber-muted uppercase tracking-wide mb-3">
+            Pending Letter Requests
+          </h3>
+          {letterRequests.length === 0 ? (
+            <div className="cyber-card text-center py-8">
+              <p className="text-cyber-muted text-sm">No pending letter requests.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {letterRequests.map((req) => (
+                <div key={req.id} className="cyber-card">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-medium">{req.category}</h4>
+                        <StatusBadge status={req.status} />
+                      </div>
+                      <p className="text-sm text-cyber-muted">{req.description}</p>
+                      <p className="text-xs text-cyber-muted mt-2">
+                        {req.residentName} · {formatDate(req.createdAt)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openLetterForm(req)}
+                      className="cyber-btn-primary text-sm"
+                    >
+                      Create Letter
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-cyber-muted uppercase tracking-wide mb-3">
+            Completed Letters
+          </h3>
+          {letters.length === 0 ? (
+            <p className="text-cyber-muted text-sm">No letters created yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {letters.map((letter) => (
+                <div key={letter.id} className="cyber-card">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-medium">{letter.residentName}</h4>
+                    <StatusBadge status={letter.status} />
+                  </div>
+                  <p className="text-xs text-cyber-muted capitalize">
+                    {String(letter.letterType ?? 'letter').replace(/_/g, ' ')} · {formatDate(letter.createdAt)}
+                  </p>
+                  <p className="text-sm text-cyber-muted mt-2 line-clamp-3 whitespace-pre-wrap">
+                    {letter.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  function renderTabContent() {
+    if (loading) {
+      return <p className="text-cyber-muted text-sm animate-pulse py-8">Loading dashboard data…</p>;
+    }
+    switch (activeTab) {
+      case 'projects':
+        return renderProjects();
+      case 'requests':
+        return renderRequests();
+      case 'announcements':
+        return renderAnnouncements();
+      case 'letters':
+        return renderLetters();
+      case 'profile':
+        return <ProfilePage />;
+      default:
+        return renderOverview();
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-border">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-cyber-muted">
+            Community Connect Hub
+          </p>
+          <h1 className="text-xl sm:text-2xl font-bold text-cyber-accent mt-1">
+            Councillor Dashboard – {ward}
+          </h1>
+          <p className="text-sm text-cyber-muted mt-1">Ward {wardNumber}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <DataSourceIndicator source={dataSource} />
+        </div>
+      </header>
+
+      <nav className="flex flex-wrap gap-2">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'bg-cyber-accent/10 text-cyber-accent border border-cyber-accent/30'
+                : 'text-cyber-muted border border-slate-border hover:text-cyber-text'
+            }`}
+          >
+            <i className={`fas ${tab.icon}`} aria-hidden="true" />
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {error && (
+        <div className="p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
+          {error}
+        </div>
+      )}
+      {successMessage && (
+        <div className="p-3 rounded-lg bg-status-completed/10 border border-status-completed/30 text-status-completed text-sm">
+          {successMessage}
+        </div>
+      )}
+
+      {renderTabContent()}
+
+      <Modal
+        open={!!reviewNeed}
+        onClose={() => setReviewNeed(null)}
+        title={reviewNeed ? `${reviewNeed.category} — ${reviewNeed.zone}` : 'Review Community Need'}
+        wide
+      >
+        {reviewNeed && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2 items-center">
+              <StatusBadge status="Forwarded to Councillor" />
+              <span className="text-sm text-cyber-muted">
+                {reviewNeed.residentCount ?? reviewNeed.residentIds?.length ?? 0} residents · {ward}
+              </span>
+            </div>
+            {reviewNeed.reason && (
+              <p className="text-sm text-cyber-muted">
+                <span className="font-medium text-cyber-text">WDC note:</span> {reviewNeed.reason}
+              </p>
+            )}
+            <div>
+              <p className="text-xs text-cyber-muted uppercase tracking-wide mb-2">Residents</p>
+              <div className="flex flex-wrap gap-2">
+                {(reviewNeed.residentNames ?? []).map((name) => (
+                  <span
+                    key={name}
+                    className="px-2 py-1 rounded-full text-xs bg-slate-bg border border-slate-border"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {relatedRequests.length === 0 && (
+                <p className="text-sm text-cyber-muted">No individual request details available.</p>
+              )}
+              {relatedRequests.map((req) => (
+                <div key={req.id} className="p-3 rounded-lg bg-slate-bg border border-slate-border text-sm">
+                  <p className="font-medium">{req.residentName}</p>
+                  <p className="text-cyber-muted mt-1">{req.description}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button type="button" onClick={startProposal} className="cyber-btn-success text-sm">
+                Approve &amp; Prepare Proposal
+              </button>
+              <button
+                type="button"
+                onClick={() => setReturnModal(true)}
+                className="cyber-btn-danger text-sm"
+              >
+                Return to WDC
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={returnModal} onClose={() => setReturnModal(false)} title="Return to WDC">
+        <div className="space-y-3">
+          <label className="text-xs text-cyber-muted">Reason for return</label>
+          <textarea
+            className="cyber-input min-h-[100px]"
+            value={returnReason}
+            onChange={(e) => setReturnReason(e.target.value)}
+            placeholder="Explain why this need is being returned…"
+            required
+          />
+          <button
+            type="button"
+            disabled={saving || !returnReason.trim()}
+            onClick={handleReturnToWdc}
+            className="cyber-btn-danger w-full"
+          >
+            {saving ? 'Returning…' : 'Return to WDC'}
+          </button>
+        </div>
+      </Modal>
+
+      <ProposalFormModal
+        open={proposalModal}
+        need={reviewNeed}
+        ward={ward}
+        wardId={wardId}
+        onSubmit={handleSubmitProposal}
+        onClose={() => setProposalModal(false)}
+      />
+
+      <Modal
+        open={announcementModal}
+        onClose={() => setAnnouncementModal(false)}
+        title="Create Announcement"
+        wide
+      >
+        <form onSubmit={handleCreateAnnouncement} className="space-y-3">
+          <div>
+            <label className="text-xs text-cyber-muted">Title</label>
+            <input
+              className="cyber-input"
+              value={announcementForm.title}
+              onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs text-cyber-muted">Description</label>
+            <textarea
+              className="cyber-input min-h-[100px]"
+              value={announcementForm.content}
+              onChange={(e) => setAnnouncementForm({ ...announcementForm, content: e.target.value })}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-cyber-muted">Priority</label>
+              <select
+                className="cyber-input"
+                value={announcementForm.priority}
+                onChange={(e) => setAnnouncementForm({ ...announcementForm, priority: e.target.value })}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-cyber-muted">Audience</label>
+              <select
+                className="cyber-input"
+                value={announcementForm.targetAudience}
+                onChange={(e) =>
+                  setAnnouncementForm({ ...announcementForm, targetAudience: e.target.value })
+                }
+              >
+                <option value="ward_only">Ward Only</option>
+                <option value="all">Public</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" disabled={saving} className="cyber-btn-primary w-full">
+            {saving ? 'Posting…' : 'Post Announcement'}
+          </button>
+        </form>
+      </Modal>
+
+      <Modal open={letterModal} onClose={() => setLetterModal(false)} title="Create Letter" wide>
+        {letterRequest && (
+          <form onSubmit={handleCreateLetter} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-cyber-muted">Resident Name</label>
+                <input className="cyber-input" value={letterRequest.residentName} readOnly />
+              </div>
+              <div>
+                <label className="text-xs text-cyber-muted">Letter Type</label>
+                <input
+                  className="cyber-input capitalize"
+                  value={String(letterRequest.letterType ?? 'reference').replace(/_/g, ' ')}
+                  readOnly
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-cyber-muted">Letter Content</label>
+              <textarea
+                className="cyber-input min-h-[200px] font-mono text-sm"
+                value={letterForm.content}
+                onChange={(e) => setLetterForm({ ...letterForm, content: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs text-cyber-muted">Attachment reference (optional)</label>
+              <input
+                className="cyber-input"
+                value={letterForm.attachments}
+                onChange={(e) => setLetterForm({ ...letterForm, attachments: e.target.value })}
+                placeholder="File name or URL"
+              />
+            </div>
+            <button type="submit" disabled={saving} className="cyber-btn-primary w-full">
+              {saving ? 'Saving…' : 'Create & Notify Resident'}
+            </button>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

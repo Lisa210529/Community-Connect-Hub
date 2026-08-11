@@ -1,17 +1,55 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { getNavForRole } from '../../constants';
+import { getNavForRole, ROLES } from '../../constants';
+import { normalizeRole, isCouncillorUser } from '../../constants/roleMapping';
+
+function isNavItemActive(path, location) {
+  if (path === '/dashboard/councillor') {
+    return location.pathname === '/dashboard/councillor';
+  }
+  if (path === '/dashboard/mayor') {
+    return location.pathname === '/dashboard/mayor';
+  }
+  if (path === '/dashboard/mayor/wards') {
+    return location.pathname.startsWith('/dashboard/mayor/wards');
+  }
+  const stakeholderBases = [
+    '/dashboard/psip',
+    '/dashboard/dsip',
+    '/dashboard/dda',
+    '/dashboard/ngo',
+    '/dashboard/open-member',
+  ];
+  for (const base of stakeholderBases) {
+    if (path === base) {
+      return location.pathname === base;
+    }
+    if (path.startsWith(`${base}/`)) {
+      return location.pathname === path;
+    }
+  }
+  return location.pathname === path;
+}
 
 export default function Sidebar({ open, onClose }) {
   const { user } = useAuth();
-  const navItems = getNavForRole(user?.role);
+  const location = useLocation();
+  const userRole = normalizeRole(user?.role);
+  const navItems = getNavForRole(user?.role, user?.rawRole, user);
+  const roleLabel = ROLES[user?.rawRole ?? userRole] ?? ROLES[userRole] ?? userRole;
 
-  const linkClass = ({ isActive }) =>
-    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-      isActive
+  if (import.meta.env.DEV) {
+    console.debug('[Sidebar] role:', user?.role, 'normalized:', userRole, 'nav:', navItems.map((n) => n.label));
+  }
+
+  const linkClass = (path) => {
+    const active = isNavItemActive(path, location);
+    return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+      active
         ? 'bg-primary/10 text-primary border border-primary/30'
         : 'text-text-secondary hover:text-text-primary hover:bg-background'
     }`;
+  };
 
   return (
     <>
@@ -33,7 +71,10 @@ export default function Sidebar({ open, onClose }) {
             <p className="font-bold text-text-primary">
               Community <span className="text-primary">Connect Hub</span>
             </p>
-            <p className="text-xs text-text-secondary mt-1 capitalize">{user?.role?.replace(/-/g, ' ')}</p>
+            <p className="text-xs text-text-secondary mt-1 capitalize">{roleLabel}</p>
+            {isCouncillorUser(user) && (
+              <p className="text-[10px] text-primary/80 mt-1">Councillor workspace</p>
+            )}
           </div>
           <button type="button" className="lg:hidden text-text-secondary" onClick={onClose}>
             <i className="fas fa-times text-lg" aria-hidden="true" />
@@ -41,7 +82,7 @@ export default function Sidebar({ open, onClose }) {
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map(({ path, label, icon }) => (
-            <NavLink key={path} to={path} className={linkClass} onClick={onClose}>
+            <NavLink key={path} to={path} className={() => linkClass(path)} onClick={onClose}>
               <i className={`fas ${icon} w-4 text-center`} />
               {label}
             </NavLink>

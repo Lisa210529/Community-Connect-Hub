@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ROLES, ROLE_DASHBOARD_PATHS, PASSWORD_RULE_LABELS } from '../../constants';
+import { ROLES, resolveDashboardPath, PASSWORD_RULE_LABELS } from '../../constants';
 import { validatePassword } from '../../utils/validation';
 import { validateOfficialRegistration } from '../../services/authService';
 import Logo from '../../components/common/Logo';
@@ -82,17 +82,16 @@ export default function OfficialSignupPage() {
         throw new Error('Pre-registration not verified. Go back and verify again.');
       }
 
-      const result = await registerOfficial({
+      await registerOfficial({
         email: preRegRecord.email,
         nid: preRegRecord.nid,
         password: formData.password,
         acceptedTerms: true,
       });
 
-      const role = result.role ?? preRegRecord.role;
-      await login(preRegRecord.email, formData.password);
+      const profile = await login(preRegRecord.email, formData.password);
 
-      navigate(ROLE_DASHBOARD_PATHS[role] || '/dashboard/resident', {
+      navigate(resolveDashboardPath(profile), {
         replace: true,
         state: {
           message: `Welcome ${preRegRecord.fullName}! Your official account is active.`,

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import NotificationBell from '../ui/NotificationBell';
 
 export default function Header({ onMenuClick, title }) {
   const { user, logout } = useAuth();
@@ -28,6 +29,7 @@ export default function Header({ onMenuClick, title }) {
           <p className="text-sm font-medium text-text-primary">{user?.name}</p>
           <p className="text-xs text-text-secondary">{user?.email}</p>
         </div>
+        <NotificationBell />
         <button
           type="button"
           onClick={handleLogout}

@@ -1,8 +1,9 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { hasAnyRole, isCouncillorUser, normalizeRole } from '../../constants/roleMapping';
 
 export default function ProtectedRoute({ allowedRoles }) {
-  const { isAuthenticated, loading, role } = useAuth();
+  const { isAuthenticated, loading, role, user } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +15,11 @@ export default function ProtectedRoute({ allowedRoles }) {
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-  if (allowedRoles?.length && !allowedRoles.includes(role)) {
+  const roleAllowed = !allowedRoles?.length || hasAnyRole(role, allowedRoles);
+  const councillorRouteAllowed =
+    allowedRoles?.some((r) => normalizeRole(r) === 'councillor') && isCouncillorUser(user);
+
+  if (!roleAllowed && !councillorRouteAllowed) {
     return <Navigate to="/" replace />;
   }
 

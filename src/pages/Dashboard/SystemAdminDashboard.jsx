@@ -1,10 +1,14 @@
+import { useState } from 'react';
 import QuickActions from '../../components/ui/QuickActions';
 import StatCard from '../../components/ui/StatCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants';
-import { updateItem, addAuditLog } from '../../services/localStorageService';
+import { normalizeRole } from '../../constants/roleMapping';
+import { normalizeAllUserRoles } from '../../services/authService';
+import { updateItem, addAuditLog, isDataMigrated } from '../../services/localStorageService';
+import { firestoreService } from '../../services/firestoreService';
 
 function formatTimestamp(iso) {
   return new Date(iso).toLocaleString('en-PG', {
@@ -34,6 +38,13 @@ export default function SystemAdminDashboard() {
   const { user } = useAuth();
   const { getData, refresh } = useData();
   const data = getData();
+  const [migrationResults, setMigrationResults] = useState(null);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationError, setMigrationError] = useState('');
+  const [normalizingRoles, setNormalizingRoles] = useState(false);
+  const [normalizeMessage, setNormalizeMessage] = useState('');
+  const showMigration = !isDataMigrated();
+  const adminRole = normalizeRole(user?.role);
 
   const users = data?.users ?? [];
   const auditLogs = [...(data?.auditLogs ?? [])]
@@ -79,6 +90,46 @@ export default function SystemAdminDashboard() {
     refresh();
   }
 
+  async function handleMigration() {
+    setMigrating(true);
+    setMigrationError('');
+    try {
+      const results = await firestoreService.migrateFromLocalStorage();
+      setMigrationResults(results);
+      addAuditLog(
+        'DATA_MIGRATED',
+        user?.name,
+        adminRole,
+        'Migrated localStorage data to Firestore',
+      );
+      refresh();
+    } catch (err) {
+      setMigrationError(err.message || 'Migration failed.');
+    } finally {
+      setMigrating(false);
+    }
+  }
+
+  async function handleNormalizeRoles() {
+    setNormalizingRoles(true);
+    setNormalizeMessage('');
+    try {
+      const count = await normalizeAllUserRoles();
+      setNormalizeMessage(`Normalized ${count} user role${count === 1 ? '' : 's'}.`);
+      addAuditLog(
+        'ROLES_NORMALIZED',
+        user?.name,
+        adminRole,
+        `Normalized ${count} user roles in Firestore`,
+      );
+      refresh();
+    } catch (err) {
+      setNormalizeMessage(err.message || 'Role normalization failed.');
+    } finally {
+      setNormalizingRoles(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <header>
@@ -115,6 +166,54 @@ export default function SystemAdminDashboard() {
           Quick Actions
         </h2>
         <QuickActions actions={quickActions} />
+      </section>
+
+      {showMigration && (
+        <section className="cyber-card migration-section">
+          <h3 className="text-lg font-semibold text-cyber-text mb-2">Data Migration</h3>
+          <p className="text-cyber-muted text-sm mb-4">
+            Migrate requests, projects, announcements, and meetings from localStorage to Firestore.
+            Existing localStorage data is kept as a backup.
+          </p>
+          {migrationError && (
+            <div className="mb-4 p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
+              {migrationError}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleMigration}
+            disabled={migrating}
+            className="cyber-btn-primary"
+          >
+            {migrating ? 'Syncing to Firestore…' : 'Sync to Firestore'}
+          </button>
+          <div className="migration-status mt-4">
+            {migrationResults && (
+              <pre className="text-xs bg-slate-bg border border-slate-border rounded-lg p-4 overflow-x-auto text-cyber-muted">
+                {JSON.stringify(migrationResults, null, 2)}
+              </pre>
+            )}
+          </div>
+        </section>
+      )}
+
+      <section className="cyber-card">
+        <h3 className="text-lg font-semibold text-cyber-text mb-2">Role Normalization</h3>
+        <p className="text-cyber-muted text-sm mb-4">
+          Update legacy role keys in Firestore (e.g. wdc_chairman, system_admin, pec) to standard names.
+        </p>
+        <button
+          type="button"
+          onClick={handleNormalizeRoles}
+          disabled={normalizingRoles}
+          className="cyber-btn-secondary"
+        >
+          {normalizingRoles ? 'Normalizing roles…' : 'Normalize All User Roles'}
+        </button>
+        {normalizeMessage && (
+          <p className="text-sm text-cyber-muted mt-4">{normalizeMessage}</p>
+        )}
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

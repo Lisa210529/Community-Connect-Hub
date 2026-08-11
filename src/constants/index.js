@@ -1,7 +1,13 @@
+import { normalizeRole } from './roleMapping';
+import { WARDS, getWardSelectLabel } from './wards';
+
 export const ROLES = {
   resident: 'Resident',
+  'wdc-member': 'WDC Member',
   councillor: 'Councillor',
   mayor: 'Mayor',
+  'provincial-admin': 'Provincial Government',
+  stakeholder: 'Stakeholder',
   pec: 'Provincial Government PEC',
   dda: 'DDA',
   psip: 'PSIP',
@@ -13,6 +19,7 @@ export const ROLES = {
 
 /** Roles that require admin pre-registration before signup */
 export const OFFICIAL_ROLES = [
+  'wdc-member',
   'councillor',
   'mayor',
   'pec',
@@ -25,8 +32,11 @@ export const OFFICIAL_ROLES = [
 
 export const ROLE_DASHBOARD_PATHS = {
   resident: '/dashboard/resident',
+  'wdc-member': '/dashboard/wdc',
   councillor: '/dashboard/councillor',
   mayor: '/dashboard/mayor',
+  'provincial-admin': '/dashboard/pec',
+  stakeholder: '/dashboard/open-member',
   pec: '/dashboard/pec',
   dda: '/dashboard/dda',
   psip: '/dashboard/psip',
@@ -34,10 +44,15 @@ export const ROLE_DASHBOARD_PATHS = {
   ngo: '/dashboard/ngo',
   'open-member': '/dashboard/open-member',
   'system-admin': '/dashboard/system-admin',
+  llg_admin: '/dashboard/mayor',
+  wdc_chairman: '/dashboard/wdc',
+  system_admin: '/dashboard/system-admin',
+  provincial_admin: '/dashboard/pec',
 };
 
 /** Roles officials can be pre-registered as (admin form — not resident/system-admin) */
 export const PRE_REGISTER_ROLES = [
+  { value: 'wdc-member', label: 'WDC Member' },
   { value: 'councillor', label: 'Councillor' },
   { value: 'mayor', label: 'Mayor' },
   { value: 'pec', label: 'Provincial Government PEC' },
@@ -51,15 +66,7 @@ export const PRE_REGISTER_ROLES = [
 /** @deprecated Public signup no longer exposes role selection */
 export const REGISTER_ROLES = PRE_REGISTER_ROLES;
 
-export const WARD_OPTIONS = [
-  'Ward 1 Madang Urban',
-  'Ward 2 Alexishafen',
-  'Ward 3 Kuluguma',
-  'Ward 4 Bongu',
-  'Ward 5 Nabasa',
-  'Ward 6 Simbai Settlement',
-  'Ward 7 Bilbil',
-];
+export const WARD_OPTIONS = WARDS.map((w) => getWardSelectLabel(w));
 
 export const PROJECT_STATUSES = [
   'Pending WDC',
@@ -122,18 +129,28 @@ export const NAV_ITEMS = {
     { path: '/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
+  'wdc-member': [
+    { path: '/dashboard/wdc', label: 'Overview', icon: 'fa-home' },
+    { path: '/dashboard/wdc?tab=requests', label: 'Resident Requests', icon: 'fa-inbox' },
+    { path: '/dashboard/wdc?tab=community-needs', label: 'Community Needs', icon: 'fa-users' },
+    { path: '/projects', label: 'Projects', icon: 'fa-folder-open' },
+    { path: '/dashboard/wdc?tab=reports', label: 'Reports', icon: 'fa-chart-bar' },
+    { path: '/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
+    { path: '/profile', label: 'Profile', icon: 'fa-user' },
+  ],
   councillor: [
     { path: '/dashboard/councillor', label: 'Dashboard', icon: 'fa-home' },
-    { path: '/projects', label: 'Projects', icon: 'fa-folder-open' },
-    { path: '/requests', label: 'Requests', icon: 'fa-inbox' },
-    { path: '/meetings', label: 'Meetings', icon: 'fa-calendar' },
-    { path: '/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
-    { path: '/documents', label: 'Documents', icon: 'fa-file-alt' },
-    { path: '/profile', label: 'Profile', icon: 'fa-user' },
+    { path: '/dashboard/councillor/projects', label: 'Projects', icon: 'fa-folder-open' },
+    { path: '/dashboard/councillor/requests', label: 'Requests', icon: 'fa-inbox' },
+    { path: '/dashboard/councillor/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
+    { path: '/dashboard/councillor/letters', label: 'Letters', icon: 'fa-file-alt' },
+    { path: '/dashboard/councillor/profile', label: 'Profile', icon: 'fa-user' },
   ],
   mayor: [
     { path: '/dashboard/mayor', label: 'Dashboard', icon: 'fa-home' },
-    ...PROJECT_NAV,
+    { path: '/projects', label: 'Projects', icon: 'fa-folder-open' },
+    { path: '/dashboard/mayor/wards', label: 'Wards', icon: 'fa-map-marked-alt' },
+    { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
     { path: '/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
@@ -143,28 +160,46 @@ export const NAV_ITEMS = {
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
   dda: [
-    { path: '/dashboard/dda', label: 'Dashboard', icon: 'fa-home' },
-    ...PROJECT_NAV,
-    { path: '/meetings', label: 'Meetings', icon: 'fa-calendar' },
+    { path: '/dashboard/dda', label: 'Overview', icon: 'fa-home' },
+    { path: '/dashboard/dda/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/dda/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
+    { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
   psip: [
-    { path: '/dashboard/psip', label: 'Dashboard', icon: 'fa-home' },
-    ...PROJECT_NAV,
+    { path: '/dashboard/psip', label: 'Overview', icon: 'fa-home' },
+    { path: '/dashboard/psip/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/psip/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
+    { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
   dsip: [
-    { path: '/dashboard/dsip', label: 'Dashboard', icon: 'fa-home' },
-    ...PROJECT_NAV,
+    { path: '/dashboard/dsip', label: 'Overview', icon: 'fa-home' },
+    { path: '/dashboard/dsip/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/dsip/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
+    { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
   ngo: [
-    { path: '/dashboard/ngo', label: 'Dashboard', icon: 'fa-home' },
-    { path: '/projects', label: 'Projects', icon: 'fa-folder-open' },
+    { path: '/dashboard/ngo', label: 'Overview', icon: 'fa-home' },
+    { path: '/dashboard/ngo/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/ngo/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
     { path: '/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
   'open-member': [
+    { path: '/dashboard/open-member', label: 'Overview', icon: 'fa-home' },
+    { path: '/dashboard/open-member/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/open-member/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
+    { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
+    { path: '/profile', label: 'Profile', icon: 'fa-user' },
+  ],
+  'provincial-admin': [
+    { path: '/dashboard/pec', label: 'Dashboard', icon: 'fa-home' },
+    ...PROJECT_NAV,
+    { path: '/profile', label: 'Profile', icon: 'fa-user' },
+  ],
+  stakeholder: [
     { path: '/dashboard/open-member', label: 'Dashboard', icon: 'fa-home' },
     ...PROJECT_NAV,
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
@@ -179,8 +214,62 @@ export const NAV_ITEMS = {
   ],
 };
 
-export function getNavForRole(role) {
-  return NAV_ITEMS[role] ?? NAV_ITEMS.resident;
+export function resolveDashboardPath(user) {
+  if (!user?.role && !user?.position) return '/login';
+
+  let normalized = user?.role ? normalizeRole(user.role) : 'resident';
+  if (normalized !== 'councillor' && user?.position) {
+    const position = String(user.position).toLowerCase();
+    if (position.includes('councillor') || position.includes('councilor')) {
+      normalized = 'councillor';
+    }
+  }
+
+  const raw = user.rawRole ?? user.role;
+
+  if (normalized === 'councillor') {
+    return '/dashboard/councillor';
+  }
+
+  if (normalized === 'stakeholder') {
+    return ROLE_DASHBOARD_PATHS[raw] ?? ROLE_DASHBOARD_PATHS.stakeholder ?? '/dashboard/open-member';
+  }
+
+  if (normalized === 'provincial-admin') {
+    return ROLE_DASHBOARD_PATHS['provincial-admin'] ?? '/dashboard/pec';
+  }
+
+  return ROLE_DASHBOARD_PATHS[normalized] ?? ROLE_DASHBOARD_PATHS[raw] ?? '/dashboard/resident';
+}
+
+export function getNavForRole(role, rawRole, user) {
+  let normalized = normalizeRole(role);
+  const rawNormalized = rawRole ? normalizeRole(rawRole) : null;
+
+  if (normalized !== 'councillor' && user?.position) {
+    const position = String(user.position).toLowerCase();
+    if (position.includes('councillor') || position.includes('councilor')) {
+      normalized = 'councillor';
+    }
+  }
+
+  if (normalized === 'councillor' || rawNormalized === 'councillor') {
+    return NAV_ITEMS.councillor;
+  }
+
+  if (normalized === 'stakeholder' && rawRole && NAV_ITEMS[rawRole]) {
+    return NAV_ITEMS[rawRole];
+  }
+
+  if (normalized === 'provincial-admin') {
+    return NAV_ITEMS['provincial-admin'] ?? NAV_ITEMS.pec ?? NAV_ITEMS.resident;
+  }
+
+  if (normalized === 'wdc-member' || rawNormalized === 'wdc-member') {
+    return NAV_ITEMS['wdc-member'];
+  }
+
+  return NAV_ITEMS[normalized] ?? NAV_ITEMS[role] ?? NAV_ITEMS.resident;
 }
 
 export function isOfficialRole(role) {

@@ -1,10 +1,11 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { hasAnyRole } from '../../constants/roleMapping';
 
 export default function AdminPage() {
   const { role } = useAuth();
 
-  if (role !== 'system_admin') {
+  if (!hasAnyRole(role, ['system-admin'])) {
     return <Navigate to="/" replace />;
   }
 

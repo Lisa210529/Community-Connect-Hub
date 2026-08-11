@@ -7,13 +7,10 @@ import {
 } from '../../services/authService';
 import { validatePassword } from '../../utils/validation';
 import { PASSWORD_RULE_LABELS } from '../../constants';
+import { getWardSelectOptions } from '../../constants/wards';
 import Logo from '../../components/common/Logo';
 
-const RESIDENT_WARD_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
-  value: `ward${i + 1}`,
-  label: `Ward ${i + 1}`,
-  wardNumber: String(i + 1),
-}));
+const RESIDENT_WARD_OPTIONS = getWardSelectOptions();
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -49,7 +46,7 @@ export default function RegisterPage() {
       ...prev,
       wardId: wardValue,
       wardNumber: option?.wardNumber ?? '',
-      ward: option?.label ?? '',
+      ward: option?.ward ?? option?.label ?? '',
     }));
   }
 

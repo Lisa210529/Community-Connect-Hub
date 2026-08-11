@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { ROLE_DASHBOARD_PATHS } from '../constants';
+import { resolveDashboardPath } from '../constants';
 import { validateNID } from '../utils/validators';
 import { isValidEmail } from '../utils/helpers';
 import {
@@ -136,7 +136,7 @@ export function AuthProvider({ children }) {
     [user],
   );
 
-  const dashboardPath = user ? ROLE_DASHBOARD_PATHS[user.role] : '/login';
+  const dashboardPath = resolveDashboardPath(user);
 
   return (
     <AuthContext.Provider

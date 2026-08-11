@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants';
+import { hasAnyRole } from '../../constants/roleMapping';
 import { fetchAllUsers, setUserActive } from '../../services/authService';
 import StatusBadge from '../../components/ui/StatusBadge';
 
@@ -120,7 +121,7 @@ export default function ManageUsersPage() {
                     )}
                   </td>
                   <td className="py-3">
-                    {u.role !== 'system-admin' && u.uid !== user?.uid && (
+                    {!hasAnyRole(u.role, ['system-admin']) && u.uid !== user?.uid && (
                       <button
                         type="button"
                         onClick={() => toggleActive(u.uid, u.isActive)}

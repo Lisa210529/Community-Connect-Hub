@@ -1,31 +1,32 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants';
+import { hasAnyRole } from '../../constants/roleMapping';
 import { getInitials } from '../../utils/validation';
 
 const NAV_ITEMS = [
   { to: '/resident', label: 'Resident', icon: 'fa-home', roles: ['resident'] },
-  { to: '/wdc', label: 'WDC', icon: 'fa-users', roles: ['wdc_chairperson', 'wdc_secretary', 'wdc_member'] },
+  { to: '/wdc', label: 'WDC', icon: 'fa-users', roles: ['wdc-member'] },
   {
     to: '/government',
     label: 'Government',
     icon: 'fa-landmark',
-    roles: ['councillor', 'llg_admin', 'dda_officer', 'provincial_admin'],
+    roles: ['councillor', 'mayor', 'provincial-admin', 'stakeholder'],
   },
   {
     to: '/projects',
     label: 'Projects',
     icon: 'fa-project-diagram',
-    roles: ['pec_member', 'psip_coordinator', 'dsip_coordinator', 'funding_agency'],
+    roles: ['provincial-admin', 'stakeholder'],
   },
   { to: '/reports', label: 'Reports', icon: 'fa-chart-bar', roles: null },
   { to: '/feedback', label: 'Feedback', icon: 'fa-comment-dots', roles: null },
-  { to: '/admin', label: 'Admin', icon: 'fa-cog', roles: ['system_admin'] },
+  { to: '/admin', label: 'Admin', icon: 'fa-cog', roles: ['system-admin'] },
 ];
 
 function canSeeNavItem(item, role) {
   if (!item.roles) return true;
-  return item.roles.includes(role);
+  return hasAnyRole(role, item.roles);
 }
 
 export default function AppLayout() {

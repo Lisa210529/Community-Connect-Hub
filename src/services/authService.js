@@ -20,6 +20,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { normalizeRole } from '../constants/roleMapping';
 
 function mapAuthError(error) {
   const code = error?.code ?? '';
@@ -35,12 +36,26 @@ function mapAuthError(error) {
   return new Error(messages[code] ?? error?.message ?? 'Authentication failed.');
 }
 
+function sanitizeFirestoreData(data) {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined),
+  );
+}
+
 export function getNidFromData(data) {
   return data?.nid ?? data?.pid ?? '';
 }
 
 export function getRoleFromData(data) {
-  return data?.role ?? data?.userCategory ?? 'resident';
+  const raw = data?.role ?? data?.userCategory ?? '';
+  if (raw) return normalizeRole(raw);
+
+  const position = String(data?.position ?? '').toLowerCase();
+  if (position.includes('councillor') || position.includes('councilor')) {
+    return 'councillor';
+  }
+
+  return 'resident';
 }
 
 export function normalizeProfile(uid, data) {
@@ -51,6 +66,7 @@ export function normalizeProfile(uid, data) {
   const firstName = data.firstName ?? fullName.split(/\s+/)[0] ?? '';
   const lastName = data.lastName ?? fullName.split(/\s+/).slice(1).join(' ') ?? '';
   const nid = getNidFromData(data);
+  const rawRole = data?.role ?? data?.userCategory ?? '';
   const role = getRoleFromData(data);
 
   return {
@@ -60,6 +76,7 @@ export function normalizeProfile(uid, data) {
     nid,
     pid: nid,
     role,
+    rawRole: data.rawRole ?? (rawRole !== role ? rawRole : null),
     firstName,
     lastName,
     name: fullName || `${firstName} ${lastName}`.trim(),
@@ -162,7 +179,10 @@ async function removeStaleOfficialProfiles(authUid, email, nid) {
 
 function buildOfficialUserPayload(authUser, record, normalizedNid, normalizedEmail) {
   const nameParts = record.fullName.trim().split(/\s+/);
-  return {
+  const rawRole = record.role;
+  const role = normalizeRole(rawRole);
+
+  return sanitizeFirestoreData({
     uid: authUser.uid,
     userId: authUser.uid,
     fullName: record.fullName,
@@ -172,8 +192,9 @@ function buildOfficialUserPayload(authUser, record, normalizedNid, normalizedEma
     nid: normalizedNid,
     pid: normalizedNid,
     phone: record.phone ?? '',
-    role: record.role,
-    userCategory: record.role,
+    role,
+    rawRole: record.rawRole || rawRole || null,
+    userCategory: rawRole,
     position: record.position ?? '',
     ward: record.ward ?? '',
     wardId: record.wardId ?? '',
@@ -188,7 +209,7 @@ function buildOfficialUserPayload(authUser, record, normalizedNid, normalizedEma
     createdAt: serverTimestamp(),
     registeredAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  };
+  });
 }
 
 async function rollbackOfficialRegistration(authUser, createdAuth) {
@@ -402,14 +423,25 @@ export async function registerOfficialUser({ email, nid, password }) {
     await updateDoc(doc(db, 'preRegisteredUsers', record.id), {
       isRegistered: true,
       registeredAt: serverTimestamp(),
+      completedAt: serverTimestamp(),
     });
 
     await signOut(auth);
-    return { uid: authUser.uid, needsApproval: false, role: record.role };
+    return {
+      uid: authUser.uid,
+      needsApproval: false,
+      role: normalizeRole(record.role),
+      rawRole: record.rawRole || record.role || null,
+    };
   } catch (error) {
     await rollbackOfficialRegistration(authUser, createdAuth);
     if (error.code?.startsWith('auth/')) throw mapAuthError(error);
-    throw error;
+    console.error('Error saving official user data:', error);
+    throw new Error(
+      error.message?.includes('invalid data')
+        ? 'Unable to save your profile. Please try again or contact your administrator.'
+        : error.message ?? 'Registration failed. Please try again.',
+    );
   }
 }
 
@@ -417,6 +449,9 @@ export async function loginUser(email, password) {
   try {
     const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
     const profile = await getUserData(credential.user.uid);
+    if (profile) {
+      profile.role = normalizeRole(profile.role);
+    }
     const access = canAccessSystem(profile);
     if (!access.allowed) {
       await signOut(auth);
@@ -427,6 +462,28 @@ export async function loginUser(email, password) {
     if (error.code?.startsWith('auth/')) throw mapAuthError(error);
     throw error;
   }
+}
+
+export async function normalizeAllUserRoles() {
+  const snapshot = await getDocs(collection(db, 'users'));
+  const updates = [];
+
+  snapshot.forEach((userDoc) => {
+    const data = userDoc.data();
+    const normalized = normalizeRole(data.role);
+    if (normalized && normalized !== data.role) {
+      updates.push(
+        updateDoc(userDoc.ref, {
+          role: normalized,
+          rawRole: data.rawRole ?? data.role,
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    }
+  });
+
+  await Promise.all(updates);
+  return updates.length;
 }
 
 export async function updateUserData(uid, data) {

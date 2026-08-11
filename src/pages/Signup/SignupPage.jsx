@@ -2,15 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { PASSWORD_RULE_LABELS } from '../../constants';
+import { getWardSelectOptions } from '../../constants/wards';
 import { validatePassword } from '../../utils/validation';
 import { validateNID } from '../../utils/validators';
 import { checkNIDExists, checkNidInPreRegistered } from '../../services/authService';
 import Logo from '../../components/common/Logo';
 
-const RESIDENT_WARD_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
-  value: `ward${i + 1}`,
-  label: `Ward ${i + 1}`,
-}));
+const RESIDENT_WARD_OPTIONS = getWardSelectOptions();
 
 export default function SignupPage() {
   const { registerResident } = useAuth();

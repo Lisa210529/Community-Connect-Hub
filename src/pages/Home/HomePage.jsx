@@ -1,27 +1,24 @@
 import { Link } from 'react-router-dom';
 import Logo from '../../components/common/Logo';
+import heroBackground from '../../assets/images/madang-provincial-government-bg.png';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-slate-bg flex flex-col">
-      <header className="border-b border-slate-border px-6 py-4 flex items-center justify-end">
-        <div className="flex gap-3">
-          <Link to="/login" className="cyber-btn-secondary">
-            Login
-          </Link>
-          <Link to="/signup" className="cyber-btn-primary">
-            Sign Up
-          </Link>
-        </div>
-      </header>
+    <div className="relative min-h-screen flex flex-col">
+      <div
+        className="fixed inset-0 -z-20 bg-cover bg-no-repeat bg-[center_35%]"
+        style={{ backgroundImage: `url(${heroBackground})` }}
+        aria-hidden="true"
+      />
+      <div className="fixed inset-0 -z-10 bg-slate-950/70" aria-hidden="true" />
 
-      <section className="flex-1 flex flex-col items-center justify-center text-center px-6 py-16">
+      <section className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-6 py-16">
         <div className="max-w-3xl">
           <Logo size="lg" />
-          <p className="text-cyber-accent text-lg mt-4 font-medium">
+          <p className="text-white text-xl mt-6 font-semibold tracking-wide">
             Digital Governance &amp; WDC Management System
           </p>
-          <p className="text-cyber-muted mt-6 text-lg leading-relaxed">
+          <p className="text-white/85 mt-6 text-lg leading-relaxed">
             Community Connect Hub empowers ward residents, councillors, and government officials
             in Madang Province to track projects, manage service requests, schedule WDC meetings,
             and deliver transparent digital governance — starting with Ward 5 Nabasa.
@@ -31,7 +28,7 @@ export default function HomePage() {
               Get Started
             </Link>
             <Link to="/login" className="cyber-btn-secondary px-8">
-              Sign In
+              Login
             </Link>
           </div>
         </div>
@@ -42,16 +39,19 @@ export default function HomePage() {
             { icon: 'fa-users', title: 'WDC Governance', desc: 'Meetings, resolutions & member management' },
             { icon: 'fa-chart-line', title: 'Performance', desc: 'Councillor scorecards & ward analytics' },
           ].map(({ icon, title, desc }) => (
-            <div key={title} className="cyber-card text-left">
+            <div
+              key={title}
+              className="rounded-xl border border-white/10 bg-slate-950/55 backdrop-blur-md p-6 text-left shadow-lg"
+            >
               <i className={`fas ${icon} text-cyber-accent text-2xl mb-3`} />
-              <h3 className="font-semibold">{title}</h3>
-              <p className="text-cyber-muted text-sm mt-1">{desc}</p>
+              <h3 className="font-semibold text-white">{title}</h3>
+              <p className="text-white/75 text-sm mt-1">{desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <footer className="border-t border-slate-border py-4 text-center text-cyber-muted text-sm">
+      <footer className="relative z-10 border-t border-white/10 py-4 text-center text-white/60 text-sm bg-slate-950/40 backdrop-blur-sm">
         IS406 Final Year Project — Divine Word University © 2026
       </footer>
     </div>

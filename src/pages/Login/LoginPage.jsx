@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ROLE_DASHBOARD_PATHS } from '../../constants';
+import { resolveDashboardPath } from '../../constants';
 import Logo from '../../components/common/Logo';
 
 export default function LoginPage() {
@@ -29,7 +29,7 @@ export default function LoginPage() {
     try {
       const userData = await login(email, password);
       void rememberMe;
-      navigate(ROLE_DASHBOARD_PATHS[userData.role] || '/dashboard/resident');
+      navigate(resolveDashboardPath(userData));
     } catch (err) {
       setError(err.message);
     } finally {

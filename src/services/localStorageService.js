@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'cch_app_data';
 const SESSION_KEY = 'cch_session';
 const STORAGE_VERSION = '5';
+const DATA_MIGRATED_KEY = 'dataMigrated';
 
 export function initializeStorage(initialData) {
   const version = localStorage.getItem('cch_version');
@@ -82,4 +83,12 @@ export function addAuditLog(action, user, role, details) {
     details,
     timestamp: new Date().toISOString(),
   });
+}
+
+export function isDataMigrated() {
+  return localStorage.getItem(DATA_MIGRATED_KEY) === 'true';
+}
+
+export function setDataMigrated() {
+  localStorage.setItem(DATA_MIGRATED_KEY, 'true');
 }

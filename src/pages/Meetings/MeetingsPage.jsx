@@ -1,56 +1,131 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext';
+import { hasAnyRole } from '../../constants/roleMapping';
 import { addItem, updateItem } from '../../services/localStorageService';
-import { MEETING_STATUSES } from '../../constants';
+import { firestoreService, loadHybridCollection } from '../../services/firestoreService';
 import StatusBadge from '../../components/ui/StatusBadge';
+import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
 import Modal from '../../components/ui/Modal';
 
 export default function MeetingsPage() {
   const { user } = useAuth();
-  const { getData, refresh } = useData();
-  const meetings = getData()?.meetings ?? [];
-  const canManage = ['wdc_chairman', 'councillor', 'system_admin'].includes(user?.role);
+  const wardId = user?.wardId || '';
+  const canManage = hasAnyRole(user?.role, ['wdc-member', 'councillor', 'system-admin']);
 
+  const [meetings, setMeetings] = useState([]);
+  const [dataSource, setDataSource] = useState('firestore');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState({ title: '', date: '', time: '', agenda: '', ward: 'Ward 5 Nabasa' });
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    title: '',
+    date: '',
+    time: '',
+    agenda: '',
+    ward: 'Ward 5 Nabasa',
+  });
 
-  function saveMeeting(e) {
+  const loadMeetings = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await loadHybridCollection('meetings', () =>
+        firestoreService.getMeetings(wardId || undefined),
+      );
+      setMeetings(result.data);
+      setDataSource(result.dataSource);
+    } catch (err) {
+      setError(err.message || 'Failed to load meetings.');
+    } finally {
+      setLoading(false);
+    }
+  }, [wardId]);
+
+  useEffect(() => {
+    loadMeetings();
+  }, [loadMeetings]);
+
+  async function saveMeeting(e) {
     e.preventDefault();
-    addItem('meetings', {
+    setSaving(true);
+    setError('');
+
+    const payload = {
       id: `mtg_${Date.now()}`,
       ...form,
       minutes: '',
       attendance: [],
       status: 'Scheduled',
-    });
-    refresh();
+      wardId: user?.wardId || '',
+    };
+
+    try {
+      await firestoreService.createMeeting(payload);
+      setDataSource('firestore');
+    } catch (err) {
+      addItem('meetings', payload);
+      setDataSource((current) => (current === 'firestore' ? 'mixed' : 'localstorage'));
+      console.error('Firestore createMeeting failed, saved to localStorage:', err);
+    }
+
+    await loadMeetings();
+    setSaving(false);
     setModal(null);
   }
 
-  function updateStatus(id, status) {
-    updateItem('meetings', id, { status });
-    refresh();
+  async function updateStatus(id, status) {
+    setSaving(true);
+    setError('');
+
+    try {
+      await firestoreService.updateMeeting(id, { status });
+      setDataSource('firestore');
+    } catch (err) {
+      updateItem('meetings', id, { status });
+      setDataSource((current) => (current === 'firestore' ? 'mixed' : 'localstorage'));
+      console.error('Firestore updateMeeting failed, updated localStorage:', err);
+    }
+
+    await loadMeetings();
+    setSaving(false);
   }
 
-  function saveMinutes(e) {
+  async function saveMinutes(e) {
     e.preventDefault();
-    updateItem('meetings', selected.id, {
+    setSaving(true);
+    setError('');
+
+    const updates = {
       minutes: selected.minutes,
       attendance: selected.attendanceText?.split(',').map((s) => s.trim()).filter(Boolean) ?? [],
       status: 'Completed',
-    });
-    refresh();
+    };
+
+    try {
+      await firestoreService.updateMeeting(selected.id, updates);
+      setDataSource('firestore');
+    } catch (err) {
+      updateItem('meetings', selected.id, updates);
+      setDataSource((current) => (current === 'firestore' ? 'mixed' : 'localstorage'));
+      console.error('Firestore updateMeeting failed, updated localStorage:', err);
+    }
+
+    await loadMeetings();
+    setSaving(false);
     setModal(null);
     setSelected(null);
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-cyber-accent">WDC Meetings</h1>
+          <div className="flex flex-wrap items-center gap-3 mb-1">
+            <h1 className="text-2xl font-bold text-cyber-accent">WDC Meetings</h1>
+            <DataSourceIndicator source={dataSource} />
+          </div>
           <p className="text-cyber-muted text-sm">Schedule meetings, record minutes and attendance</p>
         </div>
         {canManage && (
@@ -60,50 +135,99 @@ export default function MeetingsPage() {
         )}
       </div>
 
-      <div className="space-y-3">
-        {meetings.map((m) => (
-          <div key={m.id} className="cyber-card">
-            <div className="flex flex-wrap justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold">{m.title}</h3>
-                  <StatusBadge status={m.status} />
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-cyber-muted text-sm animate-pulse">Loading meetings…</p>
+      ) : (
+        <div className="space-y-3">
+          {meetings.length === 0 && (
+            <p className="text-cyber-muted text-sm">No meetings scheduled.</p>
+          )}
+          {meetings.map((m) => (
+            <div key={m.id} className="cyber-card">
+              <div className="flex flex-wrap justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold">{m.title}</h3>
+                    <StatusBadge status={m.status} />
+                  </div>
+                  <p className="text-cyber-muted text-sm">
+                    {m.date} · {m.time} · {m.ward}
+                  </p>
+                  <p className="text-sm mt-2">
+                    <span className="text-cyber-accent">Agenda:</span> {m.agenda}
+                  </p>
+                  {m.minutes && <p className="text-sm mt-1 text-cyber-muted">Minutes: {m.minutes}</p>}
+                  {m.attendance?.length > 0 && (
+                    <p className="text-xs text-cyber-muted mt-1">
+                      Attendance: {m.attendance.join(', ')}
+                    </p>
+                  )}
                 </div>
-                <p className="text-cyber-muted text-sm">{m.date} · {m.time} · {m.ward}</p>
-                <p className="text-sm mt-2"><span className="text-cyber-accent">Agenda:</span> {m.agenda}</p>
-                {m.minutes && <p className="text-sm mt-1 text-cyber-muted">Minutes: {m.minutes}</p>}
-                {m.attendance?.length > 0 && (
-                  <p className="text-xs text-cyber-muted mt-1">Attendance: {m.attendance.join(', ')}</p>
+                {canManage && (
+                  <div className="flex flex-col gap-2">
+                    {m.status === 'Scheduled' && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => updateStatus(m.id, 'In Progress')}
+                        className="cyber-btn-secondary text-sm"
+                      >
+                        Start
+                      </button>
+                    )}
+                    {(m.status === 'In Progress' || m.status === 'Scheduled') && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          setSelected({ ...m, attendanceText: m.attendance?.join(', ') ?? '' });
+                          setModal('minutes');
+                        }}
+                        className="cyber-btn-primary text-sm"
+                      >
+                        Record Minutes
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-              {canManage && (
-                <div className="flex flex-col gap-2">
-                  {m.status === 'Scheduled' && (
-                    <button type="button" onClick={() => updateStatus(m.id, 'In Progress')} className="cyber-btn-secondary text-sm">Start</button>
-                  )}
-                  {(m.status === 'In Progress' || m.status === 'Scheduled') && (
-                    <button type="button" onClick={() => { setSelected({ ...m, attendanceText: m.attendance?.join(', ') ?? '' }); setModal('minutes'); }} className="cyber-btn-primary text-sm">Record Minutes</button>
-                  )}
-                </div>
-              )}
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <Modal open={modal === 'schedule'} onClose={() => setModal(null)} title="Schedule Meeting">
         <form onSubmit={saveMeeting} className="space-y-3">
           {['title', 'date', 'time', 'ward'].map((f) => (
             <div key={f}>
               <label className="text-xs text-cyber-muted capitalize">{f}</label>
-              <input className="cyber-input" type={f === 'date' ? 'date' : 'text'} value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} required />
+              <input
+                className="cyber-input"
+                type={f === 'date' ? 'date' : 'text'}
+                value={form[f]}
+                onChange={(e) => setForm({ ...form, [f]: e.target.value })}
+                required
+              />
             </div>
           ))}
           <div>
             <label className="text-xs text-cyber-muted">Agenda</label>
-            <textarea className="cyber-input" value={form.agenda} onChange={(e) => setForm({ ...form, agenda: e.target.value })} required />
+            <textarea
+              className="cyber-input"
+              value={form.agenda}
+              onChange={(e) => setForm({ ...form, agenda: e.target.value })}
+              required
+            />
           </div>
-          <button type="submit" className="cyber-btn-primary w-full">Schedule</button>
+          <button type="submit" disabled={saving} className="cyber-btn-primary w-full">
+            {saving ? 'Scheduling…' : 'Schedule'}
+          </button>
         </form>
       </Modal>
 
@@ -111,13 +235,24 @@ export default function MeetingsPage() {
         <form onSubmit={saveMinutes} className="space-y-3">
           <div>
             <label className="text-xs text-cyber-muted">Minutes</label>
-            <textarea className="cyber-input min-h-[120px]" value={selected?.minutes ?? ''} onChange={(e) => setSelected({ ...selected, minutes: e.target.value })} required />
+            <textarea
+              className="cyber-input min-h-[120px]"
+              value={selected?.minutes ?? ''}
+              onChange={(e) => setSelected({ ...selected, minutes: e.target.value })}
+              required
+            />
           </div>
           <div>
             <label className="text-xs text-cyber-muted">Attendance (comma-separated names)</label>
-            <input className="cyber-input" value={selected?.attendanceText ?? ''} onChange={(e) => setSelected({ ...selected, attendanceText: e.target.value })} />
+            <input
+              className="cyber-input"
+              value={selected?.attendanceText ?? ''}
+              onChange={(e) => setSelected({ ...selected, attendanceText: e.target.value })}
+            />
           </div>
-          <button type="submit" className="cyber-btn-primary w-full">Save &amp; Complete</button>
+          <button type="submit" disabled={saving} className="cyber-btn-primary w-full">
+            {saving ? 'Saving…' : 'Save & Complete'}
+          </button>
         </form>
       </Modal>
     </div>

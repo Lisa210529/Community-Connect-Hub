@@ -19,6 +19,111 @@ service cloud.firestore {
       return hasUserProfile() && userProfile().role == 'system-admin';
     }
 
+    function userRole() {
+      return userProfile().role;
+    }
+
+    function isWdcMember() {
+      return hasUserProfile() && userRole() in ['wdc-member', 'wdc_chairman', 'wdc'];
+    }
+
+    // Match app-side roleMapping.js (Firestore stores raw role; app normalizes on read)
+    function isCouncillor() {
+      return hasUserProfile() && (
+        userRole() in ['councillor', 'councilor', 'ward_councillor']
+        || userProfile().get('rawRole', '') in ['councillor', 'councilor', 'ward_councillor']
+      );
+    }
+
+    function isAssignedCouncillorForNeed(needId) {
+      return isSignedIn()
+        && needId is string
+        && exists(/databases/$(database)/documents/communityNeeds/$(needId))
+        && get(/databases/$(database)/documents/communityNeeds/$(needId)).data.councillorId == request.auth.uid;
+    }
+
+    function isProposalAuthor() {
+      return isSignedIn()
+        && request.resource.data.councillorId == request.auth.uid;
+    }
+
+    function isStakeholder() {
+      return hasUserProfile() && (
+        userRole() in ['psip', 'dsip', 'dda', 'ngo', 'open-member', 'stakeholder']
+        || userProfile().get('rawRole', '') in ['psip', 'dsip', 'dda', 'ngo', 'open-member', 'open_member']
+        || userProfile().get('userCategory', '') in ['psip', 'dsip', 'dda', 'ngo', 'open-member', 'open_member']
+        || userProfile().get('position', '').matches('(?i).*(psip|dsip|dda|ngo|open member|stakeholder).*')
+      );
+    }
+
+    function stakeholderRoleCandidate() {
+      return hasUserProfile()
+        ? (
+            userProfile().get('rawRole', '') != ''
+              ? userProfile().get('rawRole', '')
+              : (
+                  userProfile().get('userCategory', '') != ''
+                    ? userProfile().get('userCategory', '')
+                    : userRole()
+                )
+          )
+        : '';
+    }
+
+    function assignedStakeholderType() {
+      return stakeholderRoleCandidate() == 'open_member'
+        ? 'open-member'
+        : (
+            stakeholderRoleCandidate() in ['psip', 'dsip', 'dda', 'ngo', 'open-member']
+              ? stakeholderRoleCandidate()
+              : ''
+          );
+    }
+
+    function canAccessFundingRequest(stakeholderTypeField) {
+      return isMayor() || isAdmin() || assignedStakeholderType() == stakeholderTypeField;
+    }
+
+    function isStakeholderActingOnFunding() {
+      return isSignedIn()
+        && request.resource.data.stakeholderId == request.auth.uid
+        && request.resource.data.status in ['approved', 'rejected', 'closed'];
+    }
+
+    function isStakeholderUpdatingProposal() {
+      return isStakeholder()
+        && request.resource.data.status in ['funded', 'funding_rejected'];
+    }
+
+    function isStakeholderUpdatingCommunityNeed() {
+      return isStakeholder()
+        && request.resource.data.status == 'funded';
+    }
+
+    function isMayor() {
+      return hasUserProfile() && (
+        userRole() in ['mayor', 'llg_admin', 'llg-admin']
+        || userProfile().get('rawRole', '') in ['mayor', 'llg_admin', 'llg-admin']
+        || userProfile().get('userCategory', '') in ['mayor', 'llg_admin', 'llg-admin']
+        || userProfile().get('position', '').matches('(?i).*(mayor|llg admin|llg_admin).*')
+      );
+    }
+
+    function isMayorSubmittingFunding() {
+      return isSignedIn()
+        && request.resource.data.mayorId == request.auth.uid;
+    }
+
+    function isMayorEscalatingProposal() {
+      return isMayorSubmittingFunding()
+        && request.resource.data.status == 'submitted_to_stakeholders';
+    }
+
+    function isOfficial() {
+      return isAdmin() || isWdcMember() || isCouncillor() || isMayor()
+        || (hasUserProfile() && userRole() == 'provincial-admin');
+    }
+
     // Official completes registration: users/{uid} already created with matching NID
     function isOfficialCompletingPreReg() {
       return hasUserProfile()
@@ -97,6 +202,122 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Community needs (WDC forwards grouped resident requests to councillor)
+    match /communityNeeds/{needId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOfficial();
+      allow update: if isSignedIn() && (
+        isOfficial()
+        || isMayor()
+        || resource.data.councillorId == request.auth.uid
+        || (
+          request.resource.data.status == 'proposal_submitted_to_mayor'
+          && request.resource.data.councillorId == request.auth.uid
+          && (!('councillorId' in resource.data) || resource.data.councillorId == null)
+        )
+        || isMayorEscalatingProposal()
+        || isStakeholderUpdatingCommunityNeed()
+        || (
+          isMayor()
+          && request.resource.data.status in ['submitted_to_stakeholders', 'funded']
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    // In-app notifications
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (
+        isAdmin()
+        || resource.data.userId == request.auth.uid
+      );
+      allow create: if isSignedIn() && (
+        isOfficial()
+        || isStakeholder()
+        || (
+          request.resource.data.type == 'proposal_submitted'
+          && request.resource.data.communityNeedId is string
+          && isAssignedCouncillorForNeed(request.resource.data.communityNeedId)
+        )
+        || request.resource.data.type in ['funding_approved', 'funding_rejected', 'funding_request']
+        || (isMayor() && request.resource.data.type == 'funding_request')
+      );
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || resource.data.userId == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
+
+    // WDC ward reports
+    match /reports/{reportId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOfficial();
+      allow update: if isSignedIn() && (isOfficial() || isWdcMember());
+      allow delete: if isAdmin();
+    }
+
+    // Project proposals (councillor submits to mayor)
+    match /projectProposals/{proposalId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        isAdmin()
+        || isCouncillor()
+        || isProposalAuthor()
+      );
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || isMayor()
+        || isCouncillor()
+        || isProposalAuthor()
+        || resource.data.councillorId == request.auth.uid
+        || isMayorEscalatingProposal()
+        || isStakeholderUpdatingProposal()
+        || (
+          isMayor()
+          && request.resource.data.status in ['submitted_to_stakeholders', 'escalated_to_stakeholder', 'funded']
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Funding requests (Mayor escalates → Stakeholder approves/rejects)
+    match /fundingRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        isAdmin()
+        || canAccessFundingRequest(resource.data.stakeholderType)
+        || resource.data.councillorId == request.auth.uid
+      );
+      allow create: if isSignedIn() && (
+        isMayor()
+        || isAdmin()
+        || isMayorSubmittingFunding()
+      );
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || isMayor()
+        || canAccessFundingRequest(resource.data.stakeholderType)
+        || isStakeholderActingOnFunding()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Reference / support letters
+    match /letters/{letterId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        isAdmin()
+        || isCouncillor()
+        || request.resource.data.councillorId == request.auth.uid
+      );
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || isCouncillor()
+        || resource.data.councillorId == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
+
     // Audit logs
     match /audit_logs/{logId} {
       allow create: if isSignedIn();
@@ -108,7 +329,7 @@ service cloud.firestore {
       allow read, write: if isSignedIn()
         && collection in [
           'budgets', 'complaints', 'documents', 'funding_agencies', 'meetings',
-          'notifications', 'ratings', 'resolutions', 'settings', 'wdc_members', 'openMembers'
+          'ratings', 'resolutions', 'settings', 'wdc_members', 'openMembers'
         ];
     }
   }
