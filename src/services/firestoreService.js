@@ -389,6 +389,19 @@ export const firestoreService = {
     return queryCollection(COLLECTIONS.LETTERS, wardId);
   },
 
+  async getLettersForResident(residentId) {
+    if (!residentId) return [];
+    const ref = collection(db, COLLECTIONS.LETTERS);
+    const snapshot = await getDocs(query(ref, where('residentId', '==', residentId), limit(50)));
+    if (!snapshot.empty) {
+      return snapshot.docs.map(normalizeDoc);
+    }
+    const all = await getDocs(query(ref, limit(100)));
+    return all.docs
+      .map(normalizeDoc)
+      .filter((letter) => letter.residentId === residentId);
+  },
+
   async createLetter(data, docId) {
     return createWithOptionalId(COLLECTIONS.LETTERS, data, docId);
   },
@@ -403,6 +416,44 @@ export const firestoreService = {
 
   async getRatings(wardId) {
     return queryCollection(COLLECTIONS.RATINGS, wardId);
+  },
+
+  async getRatingsByProject(projectId) {
+    if (!projectId) return [];
+    const ref = collection(db, COLLECTIONS.RATINGS);
+    const snapshot = await getDocs(query(ref, where('projectId', '==', projectId), limit(20)));
+    return snapshot.docs.map(normalizeDoc);
+  },
+
+  async getRatingsByResident(residentId) {
+    if (!residentId) return [];
+    const ref = collection(db, COLLECTIONS.RATINGS);
+    const snapshot = await getDocs(query(ref, where('residentId', '==', residentId), limit(30)));
+    return snapshot.docs.map(normalizeDoc);
+  },
+
+  async getRatingsForStakeholder(stakeholderType) {
+    const all = await queryCollection(COLLECTIONS.RATINGS);
+    const key = String(stakeholderType ?? '').toUpperCase();
+    return all.filter((r) => String(r.fundingSource ?? '').toUpperCase() === key);
+  },
+
+  async hasResidentRatedProject(residentId, projectId) {
+    if (!residentId || !projectId) return false;
+    const ref = collection(db, COLLECTIONS.RATINGS);
+    const snapshot = await getDocs(
+      query(
+        ref,
+        where('residentId', '==', residentId),
+        where('projectId', '==', projectId),
+        limit(1),
+      ),
+    );
+    return !snapshot.empty;
+  },
+
+  async createRating(data, docId) {
+    return createWithOptionalId(COLLECTIONS.RATINGS, data, docId);
   },
 
   async getCouncillors() {

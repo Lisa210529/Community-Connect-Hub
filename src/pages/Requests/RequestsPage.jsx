@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { hasAnyRole } from '../../constants/roleMapping';
 import { addItem, updateItem } from '../../services/localStorageService';
 import { firestoreService, loadHybridCollection } from '../../services/firestoreService';
+import { buildLetterPdfFileName, downloadLetterAsPdf } from '../../utils/fileHelpers';
 import { REQUEST_TYPES, PROJECT_CATEGORIES, WARD_ZONE_OPTIONS, LETTER_TYPES, matchesWard, resolveWardId } from '../../utils/wdcHelpers';
 import StatusBadge from '../../components/ui/StatusBadge';
 import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
@@ -28,6 +29,11 @@ export default function RequestsPage() {
     documents: '',
   });
   const [saving, setSaving] = useState(false);
+  const [letters, setLetters] = useState([]);
+  const [viewLetter, setViewLetter] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  const residentId = user?.uid ?? user?.id;
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -36,12 +42,19 @@ export default function RequestsPage() {
       const result = await loadHybridCollection('requests', () => firestoreService.getRequests());
       setRequests(result.data.filter((r) => matchesWard(r, user)));
       setDataSource(result.dataSource);
+
+      if (isResident && residentId) {
+        const residentLetters = await firestoreService.getLettersForResident(residentId);
+        setLetters(residentLetters);
+      } else {
+        setLetters([]);
+      }
     } catch (err) {
       setError(err.message || 'Failed to load requests.');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isResident, residentId]);
 
   useEffect(() => {
     loadRequests();
@@ -50,6 +63,33 @@ export default function RequestsPage() {
   const visible = isResident
     ? requests.filter((r) => r.residentId === user.id || r.residentId === user.uid)
     : requests.filter((r) => matchesWard(r, user));
+
+  const lettersByRequestId = useMemo(() => {
+    const map = new Map();
+    letters.forEach((letter) => {
+      if (letter.requestId) map.set(letter.requestId, letter);
+    });
+    return map;
+  }, [letters]);
+
+  async function handleDownloadLetter(letter, request) {
+    setDownloadingId(letter.id);
+    setError('');
+    try {
+      await downloadLetterAsPdf({
+        title: request?.category || 'Official Letter',
+        content: letter.content,
+        fileName: buildLetterPdfFileName(letter),
+        ward: request?.ward || user?.ward,
+        residentName: letter.residentName || user?.name,
+        letterType: letter.letterType || request?.category,
+      });
+    } catch (err) {
+      setError(err.message || 'Failed to download letter PDF.');
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   async function submitRequest(e) {
     e.preventDefault();
@@ -139,7 +179,14 @@ export default function RequestsPage() {
           {visible.length === 0 && (
             <p className="text-cyber-muted text-sm">No service requests found.</p>
           )}
-          {visible.map((r) => (
+          {visible.map((r) => {
+            const linkedLetter = lettersByRequestId.get(r.id);
+            const isLetterRequest = String(r.requestType ?? '').toLowerCase() === 'letter';
+            const letterReady = isLetterRequest && linkedLetter && (
+              r.status === 'completed' || r.status === 'Completed'
+            );
+
+            return (
             <div key={r.id} className="cyber-card">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -157,7 +204,31 @@ export default function RequestsPage() {
                     {r.residentName} · {r.zone || r.area || r.ward} ·{' '}
                     {new Date(r.createdAt).toLocaleDateString()}
                   </p>
+                  {letterReady && linkedLetter?.content && (
+                    <p className="text-xs text-status-completed mt-2">
+                      Letter ready from your Ward Councillor.
+                    </p>
+                  )}
                 </div>
+                {isResident && letterReady && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setViewLetter({ letter: linkedLetter, request: r })}
+                      className="cyber-btn-secondary text-sm"
+                    >
+                      View Letter
+                    </button>
+                    <button
+                      type="button"
+                      disabled={downloadingId === linkedLetter.id}
+                      onClick={() => handleDownloadLetter(linkedLetter, r)}
+                      className="cyber-btn-primary text-sm"
+                    >
+                      {downloadingId === linkedLetter.id ? 'Preparing…' : 'Download PDF'}
+                    </button>
+                  </div>
+                )}
                 {isCouncillor && r.status === 'Pending' && (
                   <div className="flex gap-2">
                     <button
@@ -190,7 +261,8 @@ export default function RequestsPage() {
                 )}
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
@@ -292,6 +364,41 @@ export default function RequestsPage() {
           </button>
         </form>
       </Modal>
+
+      <Modal
+        open={!!viewLetter}
+        onClose={() => setViewLetter(null)}
+        title="Your Official Letter"
+        wide
+      >
+        {viewLetter && (
+          <div className="space-y-4">
+            <div className="text-sm text-cyber-muted">
+              {viewLetter.request?.category} · {formatLetterDate(viewLetter.letter?.sentAt || viewLetter.letter?.createdAt)}
+            </div>
+            <pre className="whitespace-pre-wrap text-sm text-cyber-text bg-slate-bg border border-slate-border rounded-lg p-4 font-sans">
+              {viewLetter.letter?.content}
+            </pre>
+            <button
+              type="button"
+              disabled={downloadingId === viewLetter.letter?.id}
+              onClick={() => handleDownloadLetter(viewLetter.letter, viewLetter.request)}
+              className="cyber-btn-primary w-full"
+            >
+              {downloadingId === viewLetter.letter?.id ? 'Preparing PDF…' : 'Download PDF'}
+            </button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
+}
+
+function formatLetterDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-PG', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }

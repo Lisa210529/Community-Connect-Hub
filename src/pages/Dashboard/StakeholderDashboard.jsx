@@ -8,7 +8,9 @@ import Modal from '../../components/ui/Modal';
 import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
 import { ROLES, ROLE_DASHBOARD_PATHS } from '../../constants';
 import { getStakeholderType, getStakeholderLabel } from '../../constants/funding';
+import { RATING_CATEGORIES } from '../../constants/ratings';
 import { formatWardForDisplay } from '../../constants/wards';
+import Rating from '../../components/common/Rating';
 import { normalizeRole } from '../../constants/roleMapping';
 import { firestoreService } from '../../services/firestoreService';
 import { downloadBase64File } from '../../utils/fileHelpers';
@@ -66,6 +68,8 @@ export default function StakeholderDashboard() {
   const [approveForm, setApproveForm] = useState(EMPTY_APPROVE_FORM);
   const [saving, setSaving] = useState(false);
   const [resendingId, setResendingId] = useState(null);
+  const [ratings, setRatings] = useState([]);
+  const [ratingsLoading, setRatingsLoading] = useState(false);
   const backfillAttempted = useRef(new Set());
 
   const loadRequests = useCallback(async () => {
@@ -87,6 +91,26 @@ export default function StakeholderDashboard() {
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
+
+  const loadRatings = useCallback(async () => {
+    setRatingsLoading(true);
+    try {
+      const data = await firestoreService.getRatingsForStakeholder(stakeholderType);
+      setRatings(
+        data.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0)),
+      );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRatingsLoading(false);
+    }
+  }, [stakeholderType]);
+
+  useEffect(() => {
+    if (activeTab === 'approved') {
+      loadRatings();
+    }
+  }, [activeTab, loadRatings]);
 
   async function deliverFundingNotifications(request) {
     const amount = Number(request.amountApproved ?? 0);
@@ -461,44 +485,109 @@ export default function StakeholderDashboard() {
 
   function renderApproved() {
     return (
-      <section className="cyber-card">
-        <h2 className="text-lg font-semibold text-cyber-text mb-4">Approved Projects</h2>
-        {approvedRequests.length === 0 ? (
-          <p className="text-cyber-muted text-sm">No approved funding yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {approvedRequests.map((req) => (
-              <div
-                key={req.id}
-                className="p-4 rounded-lg bg-slate-bg border border-slate-border"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-cyber-text">{req.projectTitle || req.category}</p>
-                    <p className="text-sm text-cyber-muted mt-1">
-                      {formatWardForDisplay(req.ward)} · {formatCurrency(req.amountApproved)}
-                    </p>
-                    <p className="text-xs text-cyber-muted mt-1">
-                      Ref: {req.referenceNumber || '—'} · {formatDate(req.fundingDate)}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <StatusBadge status="Funded" />
-                    <button
-                      type="button"
-                      onClick={() => handleResendNotifications(req)}
-                      disabled={resendingId === req.id}
-                      className="text-xs text-cyber-accent hover:underline disabled:opacity-50"
-                    >
-                      {resendingId === req.id ? 'Sending…' : 'Resend notifications'}
-                    </button>
+      <div className="space-y-6">
+        <section className="cyber-card">
+          <h2 className="text-lg font-semibold text-cyber-text mb-4">Approved Projects</h2>
+          {approvedRequests.length === 0 ? (
+            <p className="text-cyber-muted text-sm">No approved funding yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {approvedRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className="p-4 rounded-lg bg-slate-bg border border-slate-border"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-cyber-text">{req.projectTitle || req.category}</p>
+                      <p className="text-sm text-cyber-muted mt-1">
+                        {formatWardForDisplay(req.ward)} · {formatCurrency(req.amountApproved)}
+                      </p>
+                      <p className="text-xs text-cyber-muted mt-1">
+                        Ref: {req.referenceNumber || '—'} · {formatDate(req.fundingDate)}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusBadge status="Funded" />
+                      <button
+                        type="button"
+                        onClick={() => handleResendNotifications(req)}
+                        disabled={resendingId === req.id}
+                        className="text-xs text-cyber-accent hover:underline disabled:opacity-50"
+                      >
+                        {resendingId === req.id ? 'Sending…' : 'Resend notifications'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="cyber-card">
+          <h2 className="text-lg font-semibold text-cyber-text mb-1">Resident Ratings & Evidence</h2>
+          <p className="text-sm text-cyber-muted mb-4">
+            Residents rate funded projects in their ward and upload photo evidence. WDC handles acquittal
+            and formal project reports.
+          </p>
+          {ratingsLoading ? (
+            <p className="text-cyber-muted text-sm animate-pulse">Loading ratings…</p>
+          ) : ratings.length === 0 ? (
+            <p className="text-cyber-muted text-sm">No resident ratings submitted yet for your funded projects.</p>
+          ) : (
+            <div className="space-y-4">
+              {ratings.map((rating) => (
+                <article
+                  key={rating.id}
+                  className="p-4 rounded-lg bg-slate-bg border border-slate-border"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-cyber-text">{rating.projectName || 'Project'}</p>
+                      <p className="text-sm text-cyber-muted mt-1">
+                        {formatWardForDisplay(rating.ward)} · {rating.residentName || 'Resident'}
+                        {rating.isAnonymous ? ' (anonymous)' : ''}
+                      </p>
+                      <p className="text-xs text-cyber-muted mt-1">
+                        Overall {rating.overallScore ?? rating.score ?? rating.rating ?? '—'}/5 ·{' '}
+                        {formatDate(rating.createdAt)}
+                      </p>
+                    </div>
+                    <Rating value={Math.round(Number(rating.overallScore ?? rating.score ?? 0))} readonly size="lg" />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4 text-xs">
+                    {RATING_CATEGORIES.map((category) => (
+                      <div key={category.key} className="flex justify-between gap-3 text-cyber-muted">
+                        <span>{category.label}</span>
+                        <span className="text-cyber-text">{rating[category.key] ?? '—'}/5</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {rating.comment && (
+                    <p className="text-sm text-cyber-muted mt-3 italic">&ldquo;{rating.comment}&rdquo;</p>
+                  )}
+
+                  {rating.evidencePhotoData && (
+                    <div className="mt-4">
+                      <p className="text-xs text-cyber-muted mb-2">
+                        Photo evidence{rating.evidencePhotoName ? `: ${rating.evidencePhotoName}` : ''}
+                      </p>
+                      <img
+                        src={rating.evidencePhotoData}
+                        alt={`Evidence for ${rating.projectName || 'project'}`}
+                        className="max-h-56 rounded-lg border border-slate-border object-cover"
+                      />
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     );
   }
 

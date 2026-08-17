@@ -1,10 +1,16 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import QuickActions from '../../components/ui/QuickActions';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { useData } from '../../context/DataContext';
+import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
+import ProjectRatingModal from '../../components/forms/ProjectRatingModal';
 import { useAuth } from '../../context/AuthContext';
+import { firestoreService, loadHybridCollection } from '../../services/firestoreService';
+import { canRateProjectStatus } from '../../constants/ratings';
+import { matchesWard, resolveWardId } from '../../utils/wdcHelpers';
 
 function formatDate(iso) {
+  if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-PG', {
     day: 'numeric',
     month: 'short',
@@ -12,50 +18,148 @@ function formatDate(iso) {
   });
 }
 
-function matchesWard(itemWard, userWard) {
-  if (!userWard) return true;
-  if (!itemWard) return false;
-  return itemWard === userWard || itemWard.includes(userWard) || userWard.includes(itemWard);
-}
-
 export default function ResidentDashboard() {
   const { user } = useAuth();
-  const { getData } = useData();
-  const data = getData();
+  const wardId = resolveWardId(user);
+  const residentId = user?.uid ?? user?.id;
 
-  const ward = user?.ward ?? '';
-  const projects = (data?.projects ?? [])
-    .filter((p) => matchesWard(p.ward, ward))
-    .sort((a, b) => new Date(b.dateLogged) - new Date(a.dateLogged))
-    .slice(0, 5);
+  const [projects, setProjects] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [ratedProjectIds, setRatedProjectIds] = useState(new Set());
+  const [dataSource, setDataSource] = useState('firestore');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [ratingProject, setRatingProject] = useState(null);
+  const [savingRating, setSavingRating] = useState(false);
 
-  const announcements = (data?.announcements ?? [])
-    .filter(
-      (a) =>
-        a.isActive &&
-        (a.targetAudience === 'all' ||
-          a.targetAudience === 'residents' ||
-          a.ward === 'All Wards' ||
-          matchesWard(a.ward, ward)),
-    )
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 3);
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [projResult, annResult, myRatings] = await Promise.all([
+        loadHybridCollection('projects', () => firestoreService.getProjects()),
+        loadHybridCollection('announcements', () => firestoreService.getAnnouncements()),
+        residentId ? firestoreService.getRatingsByResident(residentId) : Promise.resolve([]),
+      ]);
+
+      setProjects(projResult.data.filter((p) => matchesWard(p, user)));
+      setAnnouncements(
+        annResult.data
+          .filter(
+            (a) =>
+              a.isActive !== false
+              && (a.targetAudience === 'all'
+                || a.targetAudience === 'residents'
+                || a.ward === 'All Wards'
+                || matchesWard(a, user)),
+          )
+          .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0)),
+      );
+      setRatedProjectIds(new Set(myRatings.map((r) => r.projectId).filter(Boolean)));
+      setDataSource(projResult.dataSource);
+    } catch (err) {
+      setError(err.message || 'Failed to load dashboard.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user, residentId]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  const rateableProjects = useMemo(
+    () => projects.filter(
+      (p) => canRateProjectStatus(p.status) && !ratedProjectIds.has(p.id),
+    ),
+    [projects, ratedProjectIds],
+  );
+
+  const latestProjects = useMemo(
+    () => [...projects]
+      .sort((a, b) => new Date(b.dateLogged ?? 0) - new Date(a.dateLogged ?? 0))
+      .slice(0, 5),
+    [projects],
+  );
 
   const quickActions = [
     { label: 'View Projects', to: '/projects', icon: 'fa-folder-open' },
     { label: 'Submit Requests', to: '/requests', icon: 'fa-inbox' },
-    { label: 'Rate Projects', to: '/projects', icon: 'fa-star' },
     { label: 'View Announcements', to: '/announcements', icon: 'fa-bullhorn' },
   ];
+
+  async function handleSubmitRating({ scores, overallScore, comment, evidencePhotoName, evidencePhotoData }) {
+    if (!ratingProject || !residentId) return;
+    setSavingRating(true);
+    setError('');
+    try {
+      await firestoreService.createRating({
+        projectId: ratingProject.id,
+        proposalId: ratingProject.proposalId ?? null,
+        projectName: ratingProject.name,
+        residentId,
+        residentName: user?.name ?? user?.fullName ?? 'Resident',
+        ward: ratingProject.ward || user?.ward,
+        wardId: ratingProject.wardId || wardId,
+        zone: ratingProject.zone || null,
+        fundingSource: ratingProject.fundingSource ?? null,
+        ...scores,
+        overallScore,
+        score: overallScore,
+        rating: overallScore,
+        comment,
+        evidencePhotoName,
+        evidencePhotoData,
+        isAnonymous: false,
+      });
+
+      const stakeholders = await firestoreService.findAllStakeholders();
+      await Promise.all(
+        stakeholders.map((s) =>
+          firestoreService.createNotification({
+            userId: s.uid ?? s.id,
+            type: 'project_rating',
+            title: 'New Project Rating & Evidence',
+            message: `${user?.name ?? 'A resident'} rated "${ratingProject.name}" (${overallScore}/5) with photo evidence.`,
+            wardId: ratingProject.wardId || wardId,
+            projectId: ratingProject.id,
+          }).catch(() => null),
+        ),
+      );
+
+      setSuccessMessage('Thank you! Your rating and photo evidence were submitted.');
+      setRatingProject(null);
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message || 'Failed to submit rating.');
+    } finally {
+      setSavingRating(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold text-cyber-accent">Resident Dashboard</h1>
+        <div className="flex flex-wrap items-center gap-3 mb-1">
+          <h1 className="text-2xl font-bold text-cyber-accent">Resident Dashboard</h1>
+          <DataSourceIndicator source={dataSource} />
+        </div>
         <p className="text-cyber-muted text-sm mt-1">
-          Welcome back, {user?.name}. Track ward projects, submit requests, and stay informed.
+          Welcome back, {user?.name}. Track ward projects, submit requests, and rate funded work.
         </p>
       </header>
+
+      {successMessage && (
+        <div className="p-3 rounded-lg bg-status-completed/10 border border-status-completed/30 text-status-completed text-sm">
+          {successMessage}
+        </div>
+      )}
+      {error && (
+        <div className="p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
+          {error}
+        </div>
+      )}
 
       <section>
         <h2 className="text-sm font-semibold text-cyber-muted uppercase tracking-wide mb-3">
@@ -65,17 +169,65 @@ export default function ResidentDashboard() {
       </section>
 
       <section className="cyber-card">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold text-cyber-text">Rate Funded Projects</h2>
+        </div>
+        <p className="text-sm text-cyber-muted mb-4">
+          Rate projects funded in your ward and upload photo evidence for stakeholders. WDC handles
+          acquittal and formal project reports.
+        </p>
+        {loading ? (
+          <p className="text-cyber-muted text-sm animate-pulse">Loading projects…</p>
+        ) : rateableProjects.length === 0 ? (
+          <p className="text-cyber-muted text-sm">
+            No funded projects ready to rate right now. Check back after a project is funded in your ward.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {rateableProjects.map((project) => (
+              <div
+                key={project.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-slate-bg border border-slate-border"
+              >
+                <div>
+                  <p className="font-medium text-cyber-text">{project.name}</p>
+                  <p className="text-xs text-cyber-muted mt-0.5">
+                    {project.category} · {project.zone || project.ward} · {formatDate(project.dateLogged)}
+                  </p>
+                  {project.fundingSource && (
+                    <p className="text-xs text-cyber-muted mt-1">
+                      Funded by {project.fundingSource}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <StatusBadge status={project.status} />
+                  <button
+                    type="button"
+                    onClick={() => setRatingProject(project)}
+                    className="cyber-btn-primary text-xs py-1.5 px-3"
+                  >
+                    Rate & Upload Photo
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="cyber-card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-cyber-text">Latest Projects</h2>
           <Link to="/projects" className="text-sm text-cyber-accent hover:underline">
             View all
           </Link>
         </div>
-        {projects.length === 0 ? (
+        {latestProjects.length === 0 ? (
           <p className="text-cyber-muted text-sm">No projects found for your ward yet.</p>
         ) : (
           <div className="space-y-3">
-            {projects.map((project) => (
+            {latestProjects.map((project) => (
               <div
                 key={project.id}
                 className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-slate-bg border border-slate-border"
@@ -90,9 +242,6 @@ export default function ResidentDashboard() {
                   <StatusBadge status={project.status} />
                   <Link to="/projects" className="text-xs text-cyber-accent hover:underline">
                     View
-                  </Link>
-                  <Link to="/projects" className="text-xs text-cyber-accent hover:underline">
-                    Rate
                   </Link>
                 </div>
               </div>
@@ -112,7 +261,7 @@ export default function ResidentDashboard() {
           <p className="text-cyber-muted text-sm">No active announcements at this time.</p>
         ) : (
           <div className="space-y-4">
-            {announcements.map((ann) => (
+            {announcements.slice(0, 3).map((ann) => (
               <article
                 key={ann.id}
                 className="p-4 rounded-lg bg-slate-bg border border-slate-border"
@@ -130,6 +279,14 @@ export default function ResidentDashboard() {
           </div>
         )}
       </section>
+
+      <ProjectRatingModal
+        open={!!ratingProject}
+        project={ratingProject}
+        onClose={() => setRatingProject(null)}
+        onSubmit={handleSubmitRating}
+        saving={savingRating}
+      />
     </div>
   );
 }
