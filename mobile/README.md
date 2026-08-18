@@ -1,55 +1,73 @@
-# Community Connect Hub — Mobile App (React Native)
+# Community Connect Hub — Android Mobile App
 
-Week 9 deliverable: Android companion app sharing Firebase backend with the web app.
+React Native app (`CommunityConnectHubMobile`) sharing Firebase Auth + Firestore with the web app.
 
 ## Prerequisites
 
-- Node.js 18+
-- Android Studio with SDK
-- JDK 17
-- Firebase project: `community-connecthub` (same as web)
+- Node.js **22.11+**
+- JDK 17+
+- Android Studio with SDK 37, Android emulator or physical device
+- Firebase project: `community-connecthub`
 
-## Setup
-
-```bash
-# From repo root
-npx react-native@latest init CommunityConnectHubMobile --directory mobile
-
-cd mobile
-npm install @react-native-firebase/app @react-native-firebase/auth @react-native-firebase/firestore
-npm install @react-navigation/native @react-navigation/native-stack @react-navigation/bottom-tabs
-npm install react-native-screens react-native-safe-area-context
-```
-
-Copy `google-services.json` from Firebase Console → Android app into `mobile/android/app/`.
-
-Use the same Firestore collections as web: `users`, `projects`, `requests`, `announcements`, `notifications`, `ratings`.
-
-## Screens (Week 9 scope)
-
-| Screen | Route | Status |
-|--------|-------|--------|
-| Login | `LoginScreen` | Scaffold in init |
-| Register | `RegisterScreen` | Scaffold in init |
-| Dashboard | `DashboardScreen` | To implement |
-| Projects | `ProjectsScreen` | To implement |
-| Requests | `RequestsScreen` | To implement |
-| Announcements | `AnnouncementsScreen` | To implement |
-| Ratings | `RatingsScreen` | To implement |
-| Profile | `ProfileScreen` | To implement |
-
-## Run on Android
+## 1. Install dependencies
 
 ```bash
-cd mobile
-npx react-native run-android
+cd mobile/CommunityConnectHubMobile
+npm install
 ```
 
-## Theme
+## 2. Connect Firebase (Android)
 
-Match web Cyber-Slate: background `#020617`, primary `#22D3EE`, card `#0F172A`.
+1. Open [Firebase Console](https://console.firebase.google.com/) → **community-connecthub**
+2. Project Settings → **Add app** → Android
+3. Package name: `com.communityconnecthubmobile`
+4. Download `google-services.json`
+5. Copy to: `android/app/google-services.json`
 
-## Notes
+See `android/app/google-services.json.example` for the expected structure.
 
-- Web app is the primary deliverable; mobile extends the same Firebase Auth + Firestore APIs.
-- Run `npx react-native init` locally to generate native `android/` and `ios/` folders (not committed here due to size).
+## 3. Run on Android
+
+Start Metro:
+
+```bash
+npm start
+```
+
+In another terminal:
+
+```bash
+npm run android
+```
+
+## App structure
+
+```
+src/
+├── screens/       Login, Register, Dashboard, Projects, Requests, Announcements, Profile
+├── navigation/    Auth stack + main tab navigator
+├── services/      firebaseService, notificationService
+├── context/       AuthContext
+├── components/    Shared UI (Cyber-Slate theme)
+└── constants/     colors.js
+```
+
+## Features
+
+- Email/password login and resident registration
+- Ward-scoped projects and announcements from Firestore
+- Resident request list
+- FCM token saved to user profile (after `google-services.json` is added)
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `google-services.json` missing | Download from Firebase Console and place in `android/app/` |
+| Gradle sync fails | Open `android/` folder in Android Studio and sync |
+| Metro cache | `npx react-native start --reset-cache` |
+| Emulator not found | Start an AVD in Android Studio Device Manager |
+
+## Web push (related)
+
+Browser push notifications are configured in the root web app (`public/firebase-messaging-sw.js`, `VITE_VAPID_PUBLIC_KEY` in `.env`).

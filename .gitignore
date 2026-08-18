@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+mobile/CommunityConnectHubMobile/node_modules/
 dist/
 
 # Environment

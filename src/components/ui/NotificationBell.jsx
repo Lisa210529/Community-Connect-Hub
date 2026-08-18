@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { firestoreService } from '../../services/firestoreService';
-import { getNotificationRoute } from '../../utils/announcementNotifications';
+import {
+  getNotificationRoute,
+} from '../../utils/announcementNotifications';
+import {
+  requestNotificationPermission,
+  subscribeToForegroundMessages,
+} from '../../services/notificationService';
 
 function formatWhen(iso) {
   if (!iso) return '';
@@ -23,7 +29,9 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [pushToast, setPushToast] = useState('');
   const panelRef = useRef(null);
+  const pushRegistered = useRef(false);
 
   const loadNotifications = useCallback(async () => {
     if (!userId) return;
@@ -41,6 +49,25 @@ export default function NotificationBell() {
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!userId || pushRegistered.current) return;
+    pushRegistered.current = true;
+
+    requestNotificationPermission(userId).catch(() => null);
+
+    let unsubscribe = () => {};
+    subscribeToForegroundMessages((payload) => {
+      const title = payload.notification?.title ?? 'New notification';
+      setPushToast(title);
+      loadNotifications();
+      setTimeout(() => setPushToast(''), 4000);
+    }).then((unsub) => {
+      unsubscribe = unsub ?? (() => {});
+    });
+
+    return () => unsubscribe();
+  }, [userId, loadNotifications]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -82,6 +109,11 @@ export default function NotificationBell() {
 
   return (
     <div className="relative" ref={panelRef}>
+      {pushToast && (
+        <div className="absolute right-0 top-full mt-1 z-50 px-3 py-2 rounded-lg bg-primary text-background text-xs shadow-lg whitespace-nowrap">
+          {pushToast}
+        </div>
+      )}
       <button
         type="button"
         onClick={handleOpen}
