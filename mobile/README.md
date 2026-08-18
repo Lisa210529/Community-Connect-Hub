@@ -9,12 +9,27 @@ React Native app (`CommunityConnectHubMobile`) sharing Firebase Auth + Firestore
 - Android Studio with SDK 37, Android emulator or physical device
 - Firebase project: `community-connecthub`
 
-## 1. Install dependencies
+## 1. Install dependencies (Windows / PowerShell)
 
-```bash
-cd mobile/CommunityConnectHubMobile
-npm install
+From the repo root:
+
+```powershell
+.\scripts\setup-mobile.ps1
 ```
+
+Or manually:
+
+```powershell
+cd mobile\CommunityConnectHubMobile
+npx --yes rimraf node_modules
+Remove-Item package-lock.json -Force -ErrorAction SilentlyContinue
+npm install
+npx react-native --version
+```
+
+> **OneDrive:** If `Remove-Item node_modules` fails or `react-native/cli.js` is missing, use `rimraf` as above or move the project to `C:\dev\` (OneDrive sync breaks deep `node_modules` paths).
+>
+> **Do not** install `react-native-cli` globally — it conflicts with the local CLI. Run `npm uninstall -g react-native-cli` if you did.
 
 ## 2. Connect Firebase (Android)
 
@@ -63,6 +78,8 @@ src/
 
 | Issue | Fix |
 |-------|-----|
+| `Cannot find module react-native/cli.js` | Run `.\scripts\setup-mobile.ps1` from repo root; uninstall global `react-native-cli` |
+| `Remove-Item node_modules` fails (Windows) | Use `npx rimraf node_modules` instead of `Remove-Item -Recurse` |
 | `google-services.json` missing | Download from Firebase Console and place in `android/app/` |
 | Gradle sync fails | Open `android/` folder in Android Studio and sync |
 | Metro cache | `npx react-native start --reset-cache` |
