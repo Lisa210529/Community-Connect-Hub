@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { hasAnyRole } from '../../constants/roleMapping';
 import { addItem, updateItem } from '../../services/localStorageService';
@@ -13,6 +14,7 @@ export default function MeetingsPage() {
   const canManage = hasAnyRole(user?.role, ['wdc-member', 'councillor', 'system-admin']);
 
   const [meetings, setMeetings] = useState([]);
+  const [resolutions, setResolutions] = useState([]);
   const [dataSource, setDataSource] = useState('firestore');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,7 +36,11 @@ export default function MeetingsPage() {
       const result = await loadHybridCollection('meetings', () =>
         firestoreService.getMeetings(wardId || undefined),
       );
+      const resResult = await loadHybridCollection('resolutions', () =>
+        firestoreService.getResolutions(wardId || undefined),
+      );
       setMeetings(result.data);
+      setResolutions(resResult.data);
       setDataSource(result.dataSource);
     } catch (err) {
       setError(err.message || 'Failed to load meetings.');
@@ -46,6 +52,14 @@ export default function MeetingsPage() {
   useEffect(() => {
     loadMeetings();
   }, [loadMeetings]);
+
+  const resolutionCountByMeeting = useMemo(
+    () => resolutions.reduce((acc, r) => {
+      if (r.meetingId) acc[r.meetingId] = (acc[r.meetingId] ?? 0) + 1;
+      return acc;
+    }, {}),
+    [resolutions],
+  );
 
   async function saveMeeting(e) {
     e.preventDefault();
@@ -168,6 +182,17 @@ export default function MeetingsPage() {
                       Attendance: {m.attendance.join(', ')}
                     </p>
                   )}
+                  <p className="text-xs text-cyber-muted mt-1">
+                    Resolutions: {resolutionCountByMeeting[m.id] ?? 0}
+                    {(resolutionCountByMeeting[m.id] ?? 0) > 0 && (
+                      <>
+                        {' · '}
+                        <Link to="/resolutions" className="text-cyber-accent hover:underline">
+                          View resolutions
+                        </Link>
+                      </>
+                    )}
+                  </p>
                 </div>
                 {canManage && (
                   <div className="flex flex-col gap-2">

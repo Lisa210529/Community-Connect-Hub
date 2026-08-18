@@ -73,6 +73,9 @@ export default function LLGAdminDashboard() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [mayorMessage, setMayorMessage] = useState('');
+  const [reviewLlgProject, setReviewLlgProject] = useState(null);
+  const [llgComment, setLlgComment] = useState('');
+  const [llgSaving, setLlgSaving] = useState(false);
 
   const [wardLoading, setWardLoading] = useState(false);
   const [wardDataSource, setWardDataSource] = useState('firestore');
@@ -308,6 +311,40 @@ export default function LLGAdminDashboard() {
     }
   }
 
+  async function handleMayorLlgDecision(approved) {
+    if (!reviewLlgProject) return;
+    setLlgSaving(true);
+    setMayorMessage('');
+    try {
+      await firestoreService.updateProject(reviewLlgProject.id, {
+        status: approved ? 'Pending Provincial' : 'Rejected',
+        mayorComment: llgComment.trim(),
+        mayorReviewedAt: new Date().toISOString(),
+        mayorReviewerId: user?.uid ?? user?.id,
+      });
+
+      if (reviewLlgProject.councillorId) {
+        await firestoreService.createNotification({
+          userId: reviewLlgProject.councillorId,
+          type: approved ? 'project_approved' : 'project_rejected',
+          title: approved ? 'Project Approved (Mayor)' : 'Project Rejected (Mayor)',
+          message: `${reviewLlgProject.name} was ${approved ? 'approved by the Mayor and forwarded to Provincial review' : 'rejected by the Mayor'}.${llgComment.trim() ? ` Comment: ${llgComment.trim()}` : ''}`,
+          wardId: reviewLlgProject.wardId,
+          projectId: reviewLlgProject.id,
+        }).catch(() => null);
+      }
+
+      setMayorMessage(`Project ${approved ? 'approved' : 'rejected'} successfully.`);
+      setReviewLlgProject(null);
+      setLlgComment('');
+      await loadWardData();
+    } catch (err) {
+      setMayorMessage(err.message || 'Failed to update project.');
+    } finally {
+      setLlgSaving(false);
+    }
+  }
+
   const llgProjectsFromStore = (data?.projects ?? []).filter((p) =>
     WARDS.some((w) => filterByWard([p], w).length > 0),
   );
@@ -350,10 +387,10 @@ export default function LLGAdminDashboard() {
     .slice(0, 5);
 
   const quickActions = [
-    { label: 'Approve Projects', to: '/projects', icon: 'fa-check-double' },
+    { label: 'Approve Projects', to: '/dashboard/mayor', icon: 'fa-check-double' },
     { label: 'Ward Monitoring', to: '/dashboard/mayor/wards', icon: 'fa-map-marked-alt' },
     { label: 'LLG Reports', to: '/reports', icon: 'fa-chart-bar' },
-    { label: 'Manage Users', to: '/profile', icon: 'fa-users-cog' },
+    { label: 'Acquittals', to: '/acquittals', icon: 'fa-file-invoice-dollar' },
     { label: 'View Projects', to: '/projects', icon: 'fa-folder-open' },
   ];
 
@@ -394,16 +431,25 @@ export default function LLGAdminDashboard() {
                 {recentPending.map((project) => (
                   <div
                     key={project.id}
-                    className="p-4 rounded-lg bg-slate-bg border border-slate-border"
+                    className="p-4 rounded-lg bg-slate-bg border border-slate-border flex flex-wrap justify-between gap-3"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-medium text-cyber-text">{project.name}</p>
-                      <StatusBadge status={project.status} />
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-cyber-text">{project.name}</p>
+                        <StatusBadge status={project.status} />
+                      </div>
+                      <p className="text-sm text-cyber-muted mt-1">
+                        {formatWardForDisplay(project.ward)} · K {Number(project.budget ?? 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-cyber-muted mt-1">{formatDate(project.dateLogged)}</p>
                     </div>
-                    <p className="text-sm text-cyber-muted mt-1">
-                      {formatWardForDisplay(project.ward)} · K {Number(project.budget ?? 0).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-cyber-muted mt-1">{formatDate(project.dateLogged)}</p>
+                    <button
+                      type="button"
+                      onClick={() => setReviewLlgProject(project)}
+                      className="cyber-btn-primary text-sm shrink-0"
+                    >
+                      Review
+                    </button>
                   </div>
                 ))}
               </div>
@@ -854,6 +900,31 @@ export default function LLGAdminDashboard() {
                     : 'Submit to Stakeholders'}
               </button>
             </form>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!reviewLlgProject} onClose={() => setReviewLlgProject(null)} title="Mayor LLG Approval" wide>
+        {reviewLlgProject && (
+          <div className="space-y-4">
+            <p className="font-medium text-lg">{reviewLlgProject.name}</p>
+            <p className="text-sm text-cyber-muted">
+              {formatWardForDisplay(reviewLlgProject.ward)} · K {Number(reviewLlgProject.budget ?? 0).toLocaleString()}
+            </p>
+            <textarea
+              className="cyber-input min-h-[80px]"
+              placeholder="Approval comments (optional)"
+              value={llgComment}
+              onChange={(e) => setLlgComment(e.target.value)}
+            />
+            <div className="flex gap-3">
+              <button type="button" disabled={llgSaving} onClick={() => handleMayorLlgDecision(true)} className="cyber-btn-success flex-1">
+                Approve → Provincial
+              </button>
+              <button type="button" disabled={llgSaving} onClick={() => handleMayorLlgDecision(false)} className="cyber-btn-danger flex-1">
+                Reject
+              </button>
+            </div>
           </div>
         )}
       </Modal>

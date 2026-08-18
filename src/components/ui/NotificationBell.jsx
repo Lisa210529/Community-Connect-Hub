@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { firestoreService } from '../../services/firestoreService';
+import { getNotificationRoute } from '../../utils/announcementNotifications';
 
 function formatWhen(iso) {
   if (!iso) return '';
@@ -16,6 +18,7 @@ function formatWhen(iso) {
 
 export default function NotificationBell() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const userId = user?.uid ?? user?.id;
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -67,6 +70,12 @@ export default function NotificationBell() {
     }
   }
 
+  async function handleNotificationClick(notification) {
+    await markRead(notification);
+    setOpen(false);
+    navigate(getNotificationRoute(notification));
+  }
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   if (!userId) return null;
@@ -106,17 +115,22 @@ export default function NotificationBell() {
                 <li key={notification.id}>
                   <button
                     type="button"
-                    onClick={() => markRead(notification)}
+                    onClick={() => handleNotificationClick(notification)}
                     className={`w-full text-left px-4 py-3 hover:bg-background transition-colors ${
                       notification.read ? 'opacity-70' : 'bg-primary/5'
                     }`}
                   >
                     <p className="text-sm font-medium text-text-primary">{notification.title}</p>
-                    <p className="text-xs text-text-secondary mt-1 leading-relaxed">
+                    <p className="text-xs text-text-secondary mt-1 leading-relaxed line-clamp-2">
                       {notification.message}
                     </p>
                     <p className="text-[10px] text-text-secondary mt-2">
                       {formatWhen(notification.createdAt)}
+                    </p>
+                    <p className="text-[10px] text-primary mt-1">
+                      {getNotificationRoute(notification).startsWith('/announcements')
+                        ? 'Tap to view in Announcements'
+                        : 'Tap to view details'}
                     </p>
                   </button>
                 </li>

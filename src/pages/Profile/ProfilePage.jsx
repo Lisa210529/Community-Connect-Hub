@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { validatePassword } from '../../utils/validation';
+import { buildOtpAuthUrl, generateMfaSecret, verifyTotpCode, generateSmsCode } from '../../utils/mfaHelpers';
 import { getStore, setCollection } from '../../services/localStorageService';
 
 export default function ProfilePage() {
@@ -16,6 +17,10 @@ export default function ProfilePage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [mfaEnabled, setMfaEnabled] = useState(user?.mfaEnabled ?? false);
+  const [mfaType, setMfaType] = useState(user?.mfaType ?? 'totp');
+  const [mfaSecret, setMfaSecret] = useState(user?.mfaSecret ?? '');
+  const [verifyCode, setVerifyCode] = useState('');
+  const [setupStep, setSetupStep] = useState(false);
 
   function saveProfile(e) {
     e.preventDefault();
@@ -50,11 +55,48 @@ export default function ProfilePage() {
     setPasswordForm({ current: '', newPass: '', confirm: '' });
   }
 
-  function toggleMfa() {
-    const next = !mfaEnabled;
-    setMfaEnabled(next);
-    updateProfile({ mfaEnabled: next });
-    setMessage(next ? 'MFA enabled (UI demo).' : 'MFA disabled.');
+  async function startMfaSetup(type) {
+    const secret = generateMfaSecret();
+    setMfaType(type);
+    setMfaSecret(secret);
+    setSetupStep(true);
+    if (type === 'sms') {
+      const code = generateSmsCode();
+      sessionStorage.setItem('mfaSetupSmsCode', code);
+      setMessage(`Demo SMS code (use to verify): ${code}`);
+    } else {
+      setMessage('Add this secret to Google Authenticator or scan the OTP URL below.');
+    }
+  }
+
+  async function confirmMfaSetup(e) {
+    e.preventDefault();
+    if (mfaType === 'sms') {
+      if (verifyCode !== sessionStorage.getItem('mfaSetupSmsCode')) {
+        setError('Invalid SMS code.');
+        return;
+      }
+    } else {
+      const valid = await verifyTotpCode(mfaSecret, verifyCode);
+      if (!valid) {
+        setError('Invalid authenticator code.');
+        return;
+      }
+    }
+    await updateProfile({ mfaEnabled: true, mfaType, mfaSecret: mfaType === 'totp' ? mfaSecret : null });
+    setMfaEnabled(true);
+    setSetupStep(false);
+    setVerifyCode('');
+    setMessage('MFA enabled successfully.');
+    setError('');
+  }
+
+  async function disableMfa() {
+    await updateProfile({ mfaEnabled: false, mfaType: null, mfaSecret: null });
+    setMfaEnabled(false);
+    setMfaSecret('');
+    setSetupStep(false);
+    setMessage('MFA disabled.');
   }
 
   return (
@@ -112,17 +154,31 @@ export default function ProfilePage() {
 
       <div className="cyber-card">
         <h2 className="font-semibold mb-4">Multi-Factor Authentication</h2>
-        <p className="text-cyber-muted text-sm mb-4">Enable MFA for additional account security (UI demonstration only).</p>
-        <button type="button" onClick={toggleMfa} className={mfaEnabled ? 'cyber-btn-danger' : 'cyber-btn-primary'}>
-          {mfaEnabled ? 'Disable MFA' : 'Enable MFA'}
-        </button>
-        {mfaEnabled && (
-          <div className="mt-4 p-4 border border-slate-border rounded-lg">
-            <p className="text-sm text-cyber-muted">Scan QR code with authenticator app (demo):</p>
-            <div className="mt-2 w-32 h-32 bg-slate-bg border border-slate-border flex items-center justify-center text-cyber-muted text-xs">
-              QR Placeholder
-            </div>
+        <p className="text-cyber-muted text-sm mb-4">Enable TOTP (authenticator app) or demo SMS verification at login.</p>
+        {mfaEnabled ? (
+          <button type="button" onClick={disableMfa} className="cyber-btn-danger">Disable MFA</button>
+        ) : !setupStep ? (
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={() => startMfaSetup('totp')} className="cyber-btn-primary">Enable TOTP</button>
+            <button type="button" onClick={() => startMfaSetup('sms')} className="cyber-btn-secondary">Enable SMS (Demo)</button>
           </div>
+        ) : (
+          <form onSubmit={confirmMfaSetup} className="space-y-3">
+            {mfaType === 'totp' && mfaSecret && (
+              <div className="p-3 rounded-lg bg-slate-bg border border-slate-border text-xs break-all">
+                <p className="text-cyber-muted mb-1">Secret: {mfaSecret}</p>
+                <p className="text-cyber-accent">{buildOtpAuthUrl(user?.email, mfaSecret)}</p>
+              </div>
+            )}
+            <input
+              className="cyber-input"
+              value={verifyCode}
+              onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Enter 6-digit code"
+              required
+            />
+            <button type="submit" className="cyber-btn-primary">Verify &amp; Enable</button>
+          </form>
         )}
       </div>
     </div>

@@ -28,8 +28,16 @@ export default function LoginPage() {
 
     try {
       const userData = await login(email, password);
-      void rememberMe;
-      navigate(resolveDashboardPath(userData));
+      if (userData?.mfaEnabled) {
+        if (userData.mfaType === 'sms') {
+          const smsCode = String(Math.floor(100000 + Math.random() * 900000));
+          sessionStorage.setItem('mfaSmsCode', smsCode);
+          console.info(`Demo SMS MFA code for ${email}: ${smsCode}`);
+        }
+        navigate('/login/mfa');
+      } else {
+        navigate(resolveDashboardPath(userData));
+      }
     } catch (err) {
       setError(err.message);
     } finally {

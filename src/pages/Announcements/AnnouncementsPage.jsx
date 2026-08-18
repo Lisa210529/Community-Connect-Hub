@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { hasAnyRole } from '../../constants/roleMapping';
 import { addItem } from '../../services/localStorageService';
@@ -6,10 +7,29 @@ import { firestoreService, loadHybridCollection } from '../../services/firestore
 import StatusBadge from '../../components/ui/StatusBadge';
 import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
 import Modal from '../../components/ui/Modal';
+import {
+  ANNOUNCEMENT_NOTIFICATION_TYPES,
+  isAnnouncementVisibleToUser,
+  notificationToAnnouncementFallback,
+} from '../../utils/announcementNotifications';
+import { resolveWardId } from '../../utils/wdcHelpers';
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-PG', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 export default function AnnouncementsPage() {
   const { user } = useAuth();
-  const wardId = user?.wardId || '';
+  const wardId = resolveWardId(user);
+  const userId = user?.uid ?? user?.id;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open');
+
   const canPost = hasAnyRole(user?.role, [
     'councillor',
     'wdc-member',
@@ -24,12 +44,13 @@ export default function AnnouncementsPage() {
   const [error, setError] = useState('');
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [form, setForm] = useState({
     title: '',
     content: '',
     priority: 'medium',
     targetAudience: 'ward_only',
-    ward: 'Ward 5 Nabasa',
+    ward: user?.ward ?? 'Ward 5 Nabasa',
   });
 
   const loadAnnouncements = useCallback(async () => {
@@ -37,20 +58,65 @@ export default function AnnouncementsPage() {
     setError('');
     try {
       const result = await loadHybridCollection('announcements', () =>
-        firestoreService.getAnnouncements(wardId || undefined),
+        firestoreService.getAnnouncements(),
       );
-      setAnnouncements(result.data);
+
+      let items = result.data.filter((a) => isAnnouncementVisibleToUser(a, user));
+
+      if (userId && !canPost) {
+        const notifications = await firestoreService.getNotifications(userId);
+        const linkedIds = new Set(
+          items.map((a) => a.id).concat(
+            notifications.map((n) => n.announcementId).filter(Boolean),
+          ),
+        );
+
+        notifications
+          .filter((n) => ANNOUNCEMENT_NOTIFICATION_TYPES.has(n.type) && !n.announcementId)
+          .forEach((notification) => {
+            const fallbackId = `notif_${notification.id}`;
+            if (!linkedIds.has(fallbackId)) {
+              items.push(notificationToAnnouncementFallback(notification, user));
+            }
+          });
+      }
+
+      items.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0));
+      setAnnouncements(items);
       setDataSource(result.dataSource);
     } catch (err) {
       setError(err.message || 'Failed to load announcements.');
     } finally {
       setLoading(false);
     }
-  }, [wardId]);
+  }, [user, userId, canPost]);
 
   useEffect(() => {
     loadAnnouncements();
   }, [loadAnnouncements]);
+
+  const visibleAnnouncements = useMemo(
+    () => announcements.filter((a) => a.isActive !== false),
+    [announcements],
+  );
+
+  useEffect(() => {
+    if (!openId || loading) return;
+    const match = visibleAnnouncements.find((a) => a.id === openId);
+    if (match) {
+      setSelectedAnnouncement(match);
+    }
+  }, [openId, loading, visibleAnnouncements]);
+
+  function openAnnouncement(announcement) {
+    setSelectedAnnouncement(announcement);
+    setSearchParams({ open: announcement.id });
+  }
+
+  function closeAnnouncement() {
+    setSelectedAnnouncement(null);
+    setSearchParams({});
+  }
 
   async function postAnnouncement(e) {
     e.preventDefault();
@@ -63,7 +129,7 @@ export default function AnnouncementsPage() {
       createdBy: user.name,
       createdAt: new Date().toISOString(),
       isActive: true,
-      wardId: user?.wardId || '',
+      wardId: wardId || user?.wardId || '',
     };
 
     try {
@@ -88,7 +154,9 @@ export default function AnnouncementsPage() {
             <h1 className="text-2xl font-bold text-cyber-accent">Announcements</h1>
             <DataSourceIndicator source={dataSource} />
           </div>
-          <p className="text-cyber-muted text-sm">Community notices and ward updates</p>
+          <p className="text-cyber-muted text-sm">
+            Community notices and ward updates from your councillor and funding alerts
+          </p>
         </div>
         {canPost && (
           <button type="button" onClick={() => setModal(true)} className="cyber-btn-primary">
@@ -105,26 +173,30 @@ export default function AnnouncementsPage() {
 
       {loading ? (
         <p className="text-cyber-muted text-sm animate-pulse">Loading announcements…</p>
+      ) : visibleAnnouncements.length === 0 ? (
+        <p className="text-cyber-muted text-sm">No active announcements.</p>
       ) : (
         <div className="space-y-3">
-          {announcements.filter((a) => a.isActive).length === 0 && (
-            <p className="text-cyber-muted text-sm">No active announcements.</p>
-          )}
-          {announcements
-            .filter((a) => a.isActive)
-            .map((a) => (
-              <div key={a.id} className="cyber-card">
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-semibold">{a.title}</h3>
-                  <StatusBadge status={a.priority} />
-                </div>
-                <p className="text-cyber-muted text-sm">{a.content}</p>
-                <p className="text-xs text-cyber-muted mt-3">
-                  {a.createdBy} · {a.ward} · {a.targetAudience} ·{' '}
-                  {new Date(a.createdAt).toLocaleDateString()}
-                </p>
+          {visibleAnnouncements.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => openAnnouncement(a)}
+              className={`cyber-card w-full text-left hover:border-cyber-accent/40 transition-colors ${
+                openId === a.id ? 'border-cyber-accent/50 ring-1 ring-cyber-accent/20' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="font-semibold">{a.title}</h3>
+                <StatusBadge status={a.priority} />
               </div>
-            ))}
+              <p className="text-cyber-muted text-sm line-clamp-2">{a.content}</p>
+              <p className="text-xs text-cyber-muted mt-3">
+                {a.createdBy} · {a.ward} · {formatDate(a.createdAt)}
+              </p>
+              <p className="text-xs text-cyber-accent mt-2">Click to view full announcement</p>
+            </button>
+          ))}
         </div>
       )}
 
@@ -180,6 +252,24 @@ export default function AnnouncementsPage() {
             {saving ? 'Publishing…' : 'Publish'}
           </button>
         </form>
+      </Modal>
+
+      <Modal open={!!selectedAnnouncement} onClose={closeAnnouncement} title="Announcement" wide>
+        {selectedAnnouncement && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold text-cyber-text">{selectedAnnouncement.title}</h2>
+              <StatusBadge status={selectedAnnouncement.priority} />
+            </div>
+            <p className="text-sm text-cyber-muted whitespace-pre-wrap">{selectedAnnouncement.content}</p>
+            <div className="text-xs text-cyber-muted border-t border-slate-border pt-3">
+              <p>Posted by {selectedAnnouncement.createdBy}</p>
+              <p>
+                {selectedAnnouncement.ward} · {formatDate(selectedAnnouncement.createdAt)}
+              </p>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

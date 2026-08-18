@@ -15,6 +15,7 @@ import {
   normalizeRequestStatus,
   LETTER_TYPES,
 } from '../../utils/wdcHelpers';
+import { notifyResidentsOfAnnouncement } from '../../utils/announcementNotifications';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'fa-th-large' },
@@ -304,8 +305,9 @@ export default function CouncillorDashboard() {
     setSaving(true);
     setError('');
     try {
-      await firestoreService.createAnnouncement({
-        id: `ann_${Date.now()}`,
+      const announcementId = `ann_${Date.now()}`;
+      const announcement = {
+        id: announcementId,
         title: announcementForm.title,
         content: announcementForm.content,
         priority: announcementForm.priority,
@@ -316,8 +318,10 @@ export default function CouncillorDashboard() {
         createdBy: user?.name,
         createdAt: new Date().toISOString(),
         isActive: true,
-      });
-      setSuccessMessage('Announcement posted successfully.');
+      };
+      await firestoreService.createAnnouncement(announcement);
+      await notifyResidentsOfAnnouncement(announcement, { wardId, ward, type: 'announcement' });
+      setSuccessMessage('Announcement posted and residents notified.');
       setAnnouncementModal(false);
       setAnnouncementForm(EMPTY_ANNOUNCEMENT);
       await loadDashboardData();

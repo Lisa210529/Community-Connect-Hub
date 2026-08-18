@@ -28,6 +28,7 @@ const COLLECTIONS = {
   PROJECTS: 'projects',
   ANNOUNCEMENTS: 'announcements',
   MEETINGS: 'meetings',
+  RESOLUTIONS: 'resolutions',
   COMMUNITY_NEEDS: 'communityNeeds',
   PROJECT_PROPOSALS: 'projectProposals',
   FUNDING_REQUESTS: 'fundingRequests',
@@ -36,15 +37,19 @@ const COLLECTIONS = {
   RATINGS: 'ratings',
   PROJECT_PHOTOS: 'projectPhotos',
   REPORTS: 'reports',
+  COMPLAINTS: 'complaints',
+  DOCUMENTS: 'documents',
+  ACQUITTALS: 'acquittals',
 };
 
-const MIGRATABLE_COLLECTIONS = ['requests', 'projects', 'announcements', 'meetings'];
+const MIGRATABLE_COLLECTIONS = ['requests', 'projects', 'announcements', 'meetings', 'resolutions'];
 
 const CREATE_FN_BY_COLLECTION = {
   requests: 'createRequest',
   projects: 'createProject',
   announcements: 'createAnnouncement',
   meetings: 'createMeeting',
+  resolutions: 'createResolution',
 };
 
 function capitalize(value) {
@@ -214,6 +219,13 @@ export const firestoreService = {
     return queryCollection(COLLECTIONS.ANNOUNCEMENTS, wardId);
   },
 
+  async getAnnouncement(id) {
+    if (!id) return null;
+    const snapshot = await getDoc(doc(db, COLLECTIONS.ANNOUNCEMENTS, id));
+    if (!snapshot.exists()) return null;
+    return normalizeDoc(snapshot);
+  },
+
   async createAnnouncement(data, docId) {
     return createWithOptionalId(COLLECTIONS.ANNOUNCEMENTS, data, docId);
   },
@@ -232,6 +244,86 @@ export const firestoreService = {
 
   async updateMeeting(id, data) {
     return updateRecord(COLLECTIONS.MEETINGS, id, data);
+  },
+
+  async getResolutions(wardId) {
+    return queryCollection(COLLECTIONS.RESOLUTIONS, wardId);
+  },
+
+  async getResolutionsByMeeting(meetingId) {
+    if (!meetingId) return [];
+    const ref = collection(db, COLLECTIONS.RESOLUTIONS);
+    const snapshot = await getDocs(query(ref, where('meetingId', '==', meetingId), limit(30)));
+    return snapshot.docs.map(normalizeDoc);
+  },
+
+  async createResolution(data, docId) {
+    const payload = {
+      ...data,
+      status: data.status ?? 'Pending',
+      votes: data.votes ?? { yes: data.votesFor ?? 0, no: data.votesAgainst ?? 0, abstain: 0 },
+      votesFor: data.votesFor ?? data.votes?.yes ?? 0,
+      votesAgainst: data.votesAgainst ?? data.votes?.no ?? 0,
+    };
+    return createWithOptionalId(COLLECTIONS.RESOLUTIONS, payload, docId);
+  },
+
+  async updateResolution(id, data) {
+    const payload = { ...data };
+    if (payload.votesFor != null || payload.votesAgainst != null) {
+      payload.votes = {
+        yes: payload.votesFor ?? payload.votes?.yes ?? 0,
+        no: payload.votesAgainst ?? payload.votes?.no ?? 0,
+        abstain: payload.votes?.abstain ?? 0,
+      };
+    }
+    return updateRecord(COLLECTIONS.RESOLUTIONS, id, payload);
+  },
+
+  async getComplaints(wardId) {
+    return queryCollection(COLLECTIONS.COMPLAINTS, wardId);
+  },
+
+  async createComplaint(data, docId) {
+    return createWithOptionalId(COLLECTIONS.COMPLAINTS, data, docId);
+  },
+
+  async updateComplaint(id, data) {
+    return updateRecord(COLLECTIONS.COMPLAINTS, id, data);
+  },
+
+  async getDocuments(wardId) {
+    return queryCollection(COLLECTIONS.DOCUMENTS, wardId);
+  },
+
+  async createDocument(data, docId) {
+    return createWithOptionalId(COLLECTIONS.DOCUMENTS, data, docId);
+  },
+
+  async getAcquittals(wardId) {
+    return queryCollection(COLLECTIONS.ACQUITTALS, wardId);
+  },
+
+  async createAcquittal(data, docId) {
+    const amountAllocated = Number(data.amountAllocated ?? 0);
+    const amountSpent = Number(data.amountSpent ?? 0);
+    return createWithOptionalId(COLLECTIONS.ACQUITTALS, {
+      ...data,
+      amountAllocated,
+      amountSpent,
+      balance: amountAllocated - amountSpent,
+      status: data.status ?? 'Draft',
+    }, docId);
+  },
+
+  async updateAcquittal(id, data) {
+    const payload = { ...data };
+    if (payload.amountAllocated != null || payload.amountSpent != null) {
+      const allocated = Number(payload.amountAllocated ?? 0);
+      const spent = Number(payload.amountSpent ?? 0);
+      payload.balance = allocated - spent;
+    }
+    return updateRecord(COLLECTIONS.ACQUITTALS, id, payload);
   },
 
   async getCommunityNeeds(wardId) {

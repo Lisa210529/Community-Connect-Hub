@@ -328,7 +328,7 @@ service cloud.firestore {
     match /{collection}/{document} {
       allow read, write: if isSignedIn()
         && collection in [
-          'budgets', 'complaints', 'documents', 'funding_agencies', 'meetings',
+          'budgets', 'complaints', 'documents', 'acquittals', 'funding_agencies', 'meetings',
           'ratings', 'resolutions', 'settings', 'wdc_members', 'openMembers'
         ];
     }

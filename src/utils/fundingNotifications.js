@@ -56,15 +56,39 @@ export async function sendFundingApprovedNotifications(request, amountApproved, 
     });
   });
 
+  const residentMessage = `Good news! ${title} in ${wardLabel} has been funded with K${Number(amountApproved).toLocaleString()}. Work will begin soon. Thank you for your community support!`;
+  const announcementId = `ann_funding_${request.proposalId || request.id || Date.now()}`;
+
+  try {
+    await firestoreService.createAnnouncement({
+      id: announcementId,
+      title: 'Community Project Funded',
+      content: residentMessage,
+      priority: 'high',
+      targetAudience: 'residents',
+      type: 'funding_approved',
+      ward: request.ward,
+      wardId: request.wardId,
+      createdBy: source,
+      createdAt: new Date().toISOString(),
+      isActive: true,
+      proposalId: request.proposalId,
+      fundingSource: stakeholderType,
+    });
+  } catch (err) {
+    console.warn('Could not create funding announcement record:', err);
+  }
+
   const residents = await firestoreService.findResidentsByWard(request.wardId, request.ward);
   residents.forEach((r) => {
     notifications.push({
       userId: r.uid ?? r.id,
       type: 'funding_approved',
       title: 'Community Project Funded',
-      message: `Good news! ${title} in ${wardLabel} has been funded with K${Number(amountApproved).toLocaleString()}. Work will begin soon. Thank you for your community support!`,
+      message: residentMessage,
       wardId: request.wardId,
       proposalId: request.proposalId,
+      announcementId,
     });
   });
 

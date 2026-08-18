@@ -172,7 +172,7 @@ export default function SystemAdminDashboard() {
         <section className="cyber-card migration-section">
           <h3 className="text-lg font-semibold text-cyber-text mb-2">Data Migration</h3>
           <p className="text-cyber-muted text-sm mb-4">
-            Migrate requests, projects, announcements, and meetings from localStorage to Firestore.
+            Migrate requests, projects, announcements, meetings, and resolutions from localStorage to Firestore.
             Existing localStorage data is kept as a backup.
           </p>
           {migrationError && (

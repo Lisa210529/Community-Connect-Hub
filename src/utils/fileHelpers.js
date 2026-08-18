@@ -90,6 +90,71 @@ export async function downloadLetterAsPdf({
   return true;
 }
 
+/** Export generated document text as a downloadable PDF. */
+export async function downloadDocumentAsPdf({
+  title = 'Document',
+  content = '',
+  fileName = 'document.pdf',
+  ward = '',
+  authorName = '',
+  template = '',
+}) {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const margin = 20;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const maxWidth = pageWidth - margin * 2;
+  let y = margin;
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(14);
+  doc.text('Community Connect Hub', margin, y);
+  y += 7;
+  doc.setFont('times', 'normal');
+  doc.setFontSize(10);
+  doc.text('Madang Urban LLG — Official Document', margin, y);
+  y += 10;
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(12);
+  doc.text(title, margin, y);
+  y += 8;
+
+  doc.setFont('times', 'normal');
+  doc.setFontSize(10);
+  const metaLines = [
+    template ? `Template: ${template}` : null,
+    authorName ? `Prepared by: ${authorName}` : null,
+    ward ? `Ward: ${ward}` : null,
+    `Date: ${new Date().toLocaleDateString('en-PG')}`,
+  ].filter(Boolean);
+
+  metaLines.forEach((line) => {
+    doc.text(line, margin, y);
+    y += 5;
+  });
+  y += 4;
+
+  const bodyLines = doc.splitTextToSize(String(content || ''), maxWidth);
+  bodyLines.forEach((line) => {
+    if (y > doc.internal.pageSize.getHeight() - margin) {
+      doc.addPage();
+      y = margin;
+    }
+    doc.text(line, margin, y);
+    y += 5;
+  });
+
+  doc.save(fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`);
+  return true;
+}
+
+export function buildDocumentPdfFileName(template, authorName) {
+  const slug = slugifyFileName(template || authorName || 'document');
+  const date = new Date().toISOString().slice(0, 10);
+  return `${slug}-${date}.pdf`;
+}
+
 export function buildLetterPdfFileName(letter) {
   const type = slugifyFileName(letter?.letterType || letter?.category || 'letter');
   const date = new Date(letter?.sentAt || letter?.createdAt || Date.now())

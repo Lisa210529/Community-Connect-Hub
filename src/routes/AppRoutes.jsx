@@ -17,6 +17,7 @@ import RequestsList from '../pages/Requests/RequestsList';
 import MeetingsList from '../pages/Meetings/MeetingsList';
 import ResolutionsList from '../pages/Resolutions/ResolutionsList';
 import AnnouncementsList from '../pages/Announcements/AnnouncementsList';
+import ComplaintsList from '../pages/Complaints/ComplaintsList';
 import Profile from '../pages/Profile/Profile';
 import DocumentGeneratorPage from '../pages/Documents/DocumentGeneratorPage';
 import OfficialSignupPage from '../pages/Signup/OfficialSignupPage';
@@ -26,6 +27,8 @@ import ApproveUsersPage from '../pages/admin/ApproveUsers';
 import ManageUsersPage from '../pages/admin/ManageUsers';
 import AuditLogsPage from '../pages/admin/AuditLogs';
 import ReportsPage from '../pages/Reports/ReportsPage';
+import MFAVerificationPage from '../pages/Login/MFAVerificationPage';
+import AcquittalsList from '../pages/Acquittals/AcquittalsList';
 
 export default function AppRoutes() {
   const { isAuthenticated, dashboardPath } = useAuth();
@@ -34,6 +37,7 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to={dashboardPath} replace /> : <Login />} />
+      <Route path="/login/mfa" element={<MFAVerificationPage />} />
       <Route path="/signup" element={<Register />} />
       <Route path="/signup/official" element={<OfficialSignupPage />} />
       <Route path="/official-register" element={<OfficialSignupPage />} />
@@ -58,10 +62,14 @@ export default function AppRoutes() {
             <Route path="/dashboard/councillor" element={<CouncillorDashboard />} />
             <Route path="/dashboard/councillor/:tab" element={<CouncillorDashboard />} />
           </Route>
-          <Route path="/dashboard/mayor" element={<LLGAdminDashboard />} />
-          <Route path="/dashboard/mayor/wards" element={<LLGAdminDashboard />} />
-          <Route path="/dashboard/mayor/wards/:wardId" element={<LLGAdminDashboard />} />
-          <Route path="/dashboard/pec" element={<ProvincialAdminDashboard />} />
+          <Route element={<ProtectedRoute allowedRoles={['mayor', 'llg_admin']} />}>
+            <Route path="/dashboard/mayor" element={<LLGAdminDashboard />} />
+            <Route path="/dashboard/mayor/wards" element={<LLGAdminDashboard />} />
+            <Route path="/dashboard/mayor/wards/:wardId" element={<LLGAdminDashboard />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedRoles={['provincial-admin', 'pec']} />}>
+            <Route path="/dashboard/pec" element={<ProvincialAdminDashboard />} />
+          </Route>
           <Route path="/dashboard/dda" element={<StakeholderDashboard />} />
           <Route path="/dashboard/dda/:tab" element={<StakeholderDashboard />} />
           <Route path="/dashboard/psip" element={<StakeholderDashboard />} />
@@ -97,6 +105,8 @@ export default function AppRoutes() {
           />
           <Route path="/meetings" element={<MeetingsList />} />
           <Route path="/resolutions" element={<ResolutionsList />} />
+          <Route path="/complaints" element={<ComplaintsList />} />
+          <Route path="/acquittals" element={<AcquittalsList />} />
           <Route
             path="/announcements"
             element={

@@ -33,3 +33,4 @@ if (USE_EMULATORS) {
 }
 
 export default app;
+export { app };

@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mfaVerified, setMfaVerified] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -78,6 +79,7 @@ export function AuthProvider({ children }) {
     const { profile } = await loginUser(email, password);
     setUser(profile);
     setFirebaseUser({ uid: profile.uid, email: profile.email });
+    setMfaVerified(!profile.mfaEnabled);
     return profile;
   }, []);
 
@@ -125,6 +127,12 @@ export function AuthProvider({ children }) {
     await logoutUser();
     setUser(null);
     setFirebaseUser(null);
+    setMfaVerified(false);
+    sessionStorage.removeItem('mfaSmsCode');
+  }, []);
+
+  const completeMfaLogin = useCallback(() => {
+    setMfaVerified(true);
   }, []);
 
   const updateProfile = useCallback(
@@ -145,7 +153,7 @@ export function AuthProvider({ children }) {
         firebaseUser,
         role: user?.role,
         loading,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user && (!user?.mfaEnabled || mfaVerified),
         login,
         register: registerUser,
         registerResident,
@@ -153,6 +161,7 @@ export function AuthProvider({ children }) {
         preRegisterOfficial: preRegisterOfficialHandler,
         logout,
         updateProfile,
+        completeMfaLogin,
         dashboardPath,
       }}
     >
