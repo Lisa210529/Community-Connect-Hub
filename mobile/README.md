@@ -43,17 +43,19 @@ See `android/app/google-services.json.example` for the expected structure.
 
 ## 3. Run on Android
 
-Start Metro:
+Start Metro (stop any existing Metro on port 8081 first with Ctrl+C):
 
-```bash
+```powershell
 npm start
 ```
 
 In another terminal:
 
-```bash
+```powershell
 npm run android
 ```
+
+> **Path with `&`:** If `npx react-native start` fails, use `npm start` instead — scripts call the CLI via `node` to avoid Windows path truncation.
 
 ## App structure
 
@@ -82,6 +84,8 @@ src/
 | `Remove-Item node_modules` fails (Windows) | Use `npx rimraf node_modules` instead of `Remove-Item -Recurse` |
 | `google-services.json` missing | Download from Firebase Console and place in `android/app/` |
 | Gradle sync fails | Open `android/` folder in Android Studio and sync |
+| C++ linker errors (`undefined symbol: std::...`) on Windows | Run `.\scripts\setup-android-ndk.ps1` from repo root, then Sync + Clean in Android Studio. Your Windows username has a space — NDK must be at `C:\ndk\27.1.12297006`. |
+| Build from OneDrive path (`&` in folder name) | Copy mobile app to `C:\dev\CCHMobile` and open that folder in Android Studio |
 | Metro cache | `npx react-native start --reset-cache` |
 | Emulator not found | Start an AVD in Android Studio Device Manager |
 
