@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, Text, StyleSheet } from 'react-native';
+import { FlatList, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/common/Card';
 import { getProjects } from '../services/firebaseService';
 import { colors } from '../constants/colors';
 
-export default function ProjectsScreen() {
+export default function ProjectsScreen({ navigation }) {
   const { user } = useAuth();
   const [projects, setProjects] = useState([]);
 
@@ -20,10 +20,12 @@ export default function ProjectsScreen() {
       keyExtractor={(item) => item.id}
       ListHeaderComponent={<Text style={styles.title}>Ward Projects</Text>}
       renderItem={({ item }) => (
-        <Card>
-          <Text style={styles.name}>{item.name}</Text>
-          <Text style={styles.meta}>{item.status} · K {Number(item.budget ?? 0).toLocaleString()}</Text>
-        </Card>
+        <TouchableOpacity onPress={() => navigation.navigate('ProjectDetail', { projectId: item.id })}>
+          <Card>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.meta}>{item.status} · K {Number(item.budget ?? 0).toLocaleString()}</Text>
+          </Card>
+        </TouchableOpacity>
       )}
       ListEmptyComponent={<Text style={styles.meta}>No projects found.</Text>}
     />

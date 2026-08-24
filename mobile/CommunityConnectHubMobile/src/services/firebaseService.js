@@ -54,3 +54,47 @@ export async function getRequests(residentId) {
     .get();
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
+
+export async function getProject(projectId) {
+  const doc = await firestore().collection('projects').doc(projectId).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
+}
+
+export async function createRequest(data) {
+  const ref = firestore().collection('requests').doc();
+  const payload = {
+    ...data,
+    id: ref.id,
+    createdAt: data.createdAt ?? new Date().toISOString(),
+    status: data.status ?? 'Pending',
+  };
+  await ref.set(payload);
+  return payload;
+}
+
+export async function hasResidentRatedProject(residentId, projectId) {
+  const snapshot = await firestore()
+    .collection('ratings')
+    .where('residentId', '==', residentId)
+    .where('projectId', '==', projectId)
+    .limit(1)
+    .get();
+  return !snapshot.empty;
+}
+
+export async function getRatingsByResident(residentId) {
+  const snapshot = await firestore()
+    .collection('ratings')
+    .where('residentId', '==', residentId)
+    .limit(30)
+    .get();
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function createRating(data) {
+  const ref = firestore().collection('ratings').doc();
+  const payload = { ...data, id: ref.id, createdAt: new Date().toISOString() };
+  await ref.set(payload);
+  return payload;
+}

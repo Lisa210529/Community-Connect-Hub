@@ -21,41 +21,19 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { normalizeRole } from '../constants/roleMapping';
+import { getNidFromData, getRoleFromData, mapAuthErrorCode } from '../utils/authHelpers';
+
+export { getNidFromData, getRoleFromData } from '../utils/authHelpers';
 
 function mapAuthError(error) {
   const code = error?.code ?? '';
-  const messages = {
-    'auth/email-already-in-use': 'This email is already registered. Please login instead.',
-    'auth/invalid-email': 'Please enter a valid email address.',
-    'auth/user-not-found': 'No account found with this email.',
-    'auth/wrong-password': 'Incorrect password. Please try again.',
-    'auth/invalid-credential': 'Invalid email or password.',
-    'auth/too-many-requests': 'Too many attempts. Please try again later.',
-    'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
-  };
-  return new Error(messages[code] ?? error?.message ?? 'Authentication failed.');
+  return new Error(mapAuthErrorCode(code, error?.message ?? 'Authentication failed.'));
 }
 
 function sanitizeFirestoreData(data) {
   return Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== undefined),
   );
-}
-
-export function getNidFromData(data) {
-  return data?.nid ?? data?.pid ?? '';
-}
-
-export function getRoleFromData(data) {
-  const raw = data?.role ?? data?.userCategory ?? '';
-  if (raw) return normalizeRole(raw);
-
-  const position = String(data?.position ?? '').toLowerCase();
-  if (position.includes('councillor') || position.includes('councilor')) {
-    return 'councillor';
-  }
-
-  return 'resident';
 }
 
 export function normalizeProfile(uid, data) {

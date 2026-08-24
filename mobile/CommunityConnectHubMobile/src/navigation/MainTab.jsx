@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import DashboardScreen from '../screens/DashboardScreen';
-import ProjectsScreen from '../screens/ProjectsScreen';
+import ProjectsStack from './ProjectsStack';
 import RequestsScreen from '../screens/RequestsScreen';
 import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -21,7 +21,7 @@ export default function MainTab() {
       }}
     >
       <Tab.Screen name="Home" component={DashboardScreen} />
-      <Tab.Screen name="Projects" component={ProjectsScreen} />
+      <Tab.Screen name="Projects" component={ProjectsStack} options={{ headerShown: false }} />
       <Tab.Screen name="Requests" component={RequestsScreen} />
       <Tab.Screen name="News" component={AnnouncementsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />

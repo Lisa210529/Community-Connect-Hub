@@ -20,4 +20,8 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  test: {
+    environment: 'node',
+    include: ['tests/**/*.test.js'],
+  },
 });

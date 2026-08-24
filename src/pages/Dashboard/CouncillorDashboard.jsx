@@ -15,6 +15,7 @@ import {
   normalizeRequestStatus,
   LETTER_TYPES,
 } from '../../utils/wdcHelpers';
+import { computeScorecard } from '../../utils/scorecardHelpers';
 import { notifyResidentsOfAnnouncement } from '../../utils/announcementNotifications';
 
 const TABS = [
@@ -74,25 +75,6 @@ async function loadWardCollection(collectionName, user, fetchAllFn) {
     ...result,
     data: result.data.filter((item) => matchesWard(item, user)),
   };
-}
-
-function computeScorecard(projects, communityNeeds, proposals, announcements) {
-  const completedProjects = projects.filter((p) => p.status === 'Completed').length;
-  const delivery =
-    projects.length === 0 ? 3 : Math.min(5, Math.round((completedProjects / projects.length) * 5) + 2);
-
-  const forwarded = communityNeeds.filter(
-    (n) => normalizeRequestStatus(n.status) === 'forwarded_to_councillor',
-  ).length;
-  const response = forwarded === 0 ? 4 : Math.min(5, 3 + forwarded);
-
-  const proposalsCount = proposals.length;
-  const engagement = Math.min(5, 3 + Math.floor(proposalsCount / 2));
-  const transparency = Math.min(5, 2 + announcements.length);
-
-  const ratings = { engagement, delivery, response, proposals: Math.min(5, 2 + proposalsCount), transparency };
-  const overall = (Object.values(ratings).reduce((sum, r) => sum + r, 0) / SCORECARD_CATEGORIES.length).toFixed(1);
-  return { ratings, overall };
 }
 
 export default function CouncillorDashboard() {
