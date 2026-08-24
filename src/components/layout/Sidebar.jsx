@@ -44,7 +44,7 @@ export default function Sidebar({ open, onClose }) {
 
   const linkClass = (path) => {
     const active = isNavItemActive(path, location);
-    return `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+    return `flex items-center gap-3 px-3 py-3 rounded-lg text-base transition-colors ${
       active
         ? 'bg-primary/10 text-primary border border-primary/30'
         : 'text-text-secondary hover:text-text-primary hover:bg-background'
@@ -68,12 +68,12 @@ export default function Sidebar({ open, onClose }) {
       >
         <div className="p-5 border-b border-border flex items-center justify-between">
           <div>
-            <p className="font-bold text-text-primary">
+            <p className="text-lg font-bold text-text-primary">
               Community <span className="text-primary">Connect Hub</span>
             </p>
-            <p className="text-xs text-text-secondary mt-1 capitalize">{roleLabel}</p>
+            <p className="text-sm text-text-secondary mt-1 capitalize">{roleLabel}</p>
             {isCouncillorUser(user) && (
-              <p className="text-[10px] text-primary/80 mt-1">Councillor workspace</p>
+              <p className="text-sm text-primary/80 mt-1">Councillor workspace</p>
             )}
           </div>
           <button type="button" className="lg:hidden text-text-secondary" onClick={onClose}>
@@ -83,7 +83,7 @@ export default function Sidebar({ open, onClose }) {
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map(({ path, label, icon }) => (
             <NavLink key={path} to={path} className={() => linkClass(path)} onClick={onClose}>
-              <i className={`fas ${icon} w-4 text-center`} />
+              <i className={`fas ${icon} w-5 text-center text-base`} />
               {label}
             </NavLink>
           ))}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import StatCard from '../../components/ui/StatCard';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -47,8 +47,7 @@ async function loadWardCollection(collectionName, user, fetchAllFn) {
 }
 
 export default function WDCDashboard() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const wardNumber = getWardNumber(user);
@@ -185,11 +184,6 @@ export default function WDCDashboard() {
     } else {
       setSearchParams({ tab: tabId });
     }
-  }
-
-  async function handleLogout() {
-    await logout();
-    navigate('/login');
   }
 
   async function handleForwardToCouncillor(group) {
@@ -562,21 +556,6 @@ export default function WDCDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <DataSourceIndicator source={dataSource} />
-          <button
-            type="button"
-            className="relative p-2.5 rounded-lg border border-border text-text-secondary hover:text-primary hover:border-primary transition-colors"
-            aria-label="Notifications"
-          >
-            <i className="fas fa-bell text-lg" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-text-secondary hover:text-primary hover:border-primary transition-colors text-sm font-medium"
-          >
-            <i className="fas fa-sign-out-alt" aria-hidden="true" />
-            Logout
-          </button>
         </div>
       </header>
 

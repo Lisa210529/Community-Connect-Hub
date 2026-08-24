@@ -30,7 +30,7 @@ export default function StatusBadge({ status }) {
   const cls = map[status] ?? 'bg-slate-border/50 text-cyber-muted border-slate-border';
 
   return (
-    <span className={`inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full border ${cls}`}>
+    <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full border ${cls}`}>
       {status}
     </span>
   );

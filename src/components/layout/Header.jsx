@@ -26,14 +26,14 @@ export default function Header({ onMenuClick, title }) {
       </div>
       <div className="flex items-center gap-4">
         <div className="text-right hidden sm:block">
-          <p className="text-sm font-medium text-text-primary">{user?.name}</p>
-          <p className="text-xs text-text-secondary">{user?.email}</p>
+          <p className="text-base font-medium text-text-primary">{user?.name}</p>
+          <p className="text-sm text-text-secondary">{user?.email}</p>
         </div>
         <NotificationBell />
         <button
           type="button"
           onClick={handleLogout}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-text-secondary hover:text-primary hover:border-primary transition-colors text-sm"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-text-secondary hover:text-primary hover:border-primary transition-colors text-base"
         >
           <i className="fas fa-sign-out-alt" aria-hidden="true" />
           <span className="hidden sm:inline">Logout</span>

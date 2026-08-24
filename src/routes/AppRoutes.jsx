@@ -28,6 +28,7 @@ import ManageUsersPage from '../pages/admin/ManageUsers';
 import AuditLogsPage from '../pages/admin/AuditLogs';
 import ReportsPage from '../pages/Reports/ReportsPage';
 import MFAVerificationPage from '../pages/Login/MFAVerificationPage';
+import ForgotPasswordPage from '../pages/Login/ForgotPasswordPage';
 import AcquittalsList from '../pages/Acquittals/AcquittalsList';
 
 export default function AppRoutes() {
@@ -37,6 +38,7 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to={dashboardPath} replace /> : <Login />} />
+      <Route path="/login/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/login/mfa" element={<MFAVerificationPage />} />
       <Route path="/signup" element={<Register />} />
       <Route path="/signup/official" element={<OfficialSignupPage />} />

@@ -582,7 +582,19 @@ export async function logoutUser() {
 }
 
 export async function resetPassword(email) {
-  await sendPasswordResetEmail(auth, email.trim());
+  const trimmed = email.trim();
+  if (!trimmed) {
+    throw new Error('Please enter your email address.');
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, trimmed, {
+      url: `${window.location.origin}/login`,
+    });
+  } catch (error) {
+    if (error.code?.startsWith('auth/')) throw mapAuthError(error);
+    throw error;
+  }
 }
 
 export function subscribeToAuthChanges(callback) {

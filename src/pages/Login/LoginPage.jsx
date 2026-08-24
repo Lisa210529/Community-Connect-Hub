@@ -97,9 +97,13 @@ export default function LoginPage() {
               />
               Remember Me
             </label>
-            <button type="button" className="text-cyber-accent hover:underline">
+            <Link
+              to="/login/forgot-password"
+              state={{ email }}
+              className="text-cyber-accent hover:underline"
+            >
               Forgot Password?
-            </button>
+            </Link>
           </div>
           <button type="submit" className="cyber-btn-primary w-full" disabled={loading}>
             {loading ? 'Signing in…' : 'Login'}

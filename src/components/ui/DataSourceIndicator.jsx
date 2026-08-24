@@ -9,7 +9,7 @@ export default function DataSourceIndicator({ source }) {
 
   return (
     <span
-      className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-slate-border bg-slate-bg text-xs text-cyber-muted"
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-border bg-slate-bg text-sm text-cyber-muted"
       title={`Data source: ${meta.label}`}
     >
       <span aria-hidden="true">{meta.emoji}</span>

@@ -25,6 +25,7 @@ export function mapAuthErrorCode(code, fallbackMessage = 'Authentication failed.
     'auth/invalid-credential': 'Invalid email or password.',
     'auth/too-many-requests': 'Too many attempts. Please try again later.',
     'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
+    'auth/missing-email': 'Please enter your email address.',
   };
   return messages[code] ?? fallbackMessage;
 }
