@@ -37,6 +37,8 @@ export async function repairApprovedFunding(request) {
       fundingRequestId: request.id,
       proposalId: request.proposalId,
       location: request.zone || ward,
+      startDate: request.startDate ?? null,
+      endDate: request.endDate ?? null,
     });
     projectCreated = true;
     project = { id: projectId, name: request.projectTitle || request.category };

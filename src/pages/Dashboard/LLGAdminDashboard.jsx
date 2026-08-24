@@ -238,6 +238,10 @@ export default function LLGAdminDashboard() {
         ward: proposal.ward,
         wardId: proposal.wardId,
         residentCount: proposal.residentCount ?? 0,
+        residentIds: proposal.residentIds ?? [],
+        requestIds: proposal.requestIds ?? [],
+        startDate: proposal.startDate ?? null,
+        endDate: proposal.endDate ?? null,
         amountRequested,
         fundingGap: amountRequested,
         mayorNotes,
@@ -838,6 +842,21 @@ export default function LLGAdminDashboard() {
             <p className="text-sm text-cyber-muted">
               {viewProposal.residentCount ?? 0} residents requested this community project.
             </p>
+            {(viewProposal.startDate || viewProposal.endDate) && (
+              <p className="text-sm text-cyber-muted">
+                Project timeline:{' '}
+                {viewProposal.startDate
+                  ? new Date(viewProposal.startDate).toLocaleDateString('en-PG')
+                  : '—'}{' '}
+                →{' '}
+                {viewProposal.endDate
+                  ? new Date(viewProposal.endDate).toLocaleDateString('en-PG')
+                  : '—'}
+                {viewProposal.estimatedCost
+                  ? ` · Est. K${Number(viewProposal.estimatedCost).toLocaleString()}`
+                  : ''}
+              </p>
+            )}
             {viewProposal.proposalFileName && (
               <p className="text-sm">
                 <span className="text-cyber-muted">Attached file:</span>{' '}

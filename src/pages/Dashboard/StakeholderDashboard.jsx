@@ -304,6 +304,8 @@ export default function StakeholderDashboard() {
           dateLogged: fundingDate,
           fundingRequestId: reviewRequest.id,
           proposalId: reviewRequest.proposalId,
+          startDate: reviewRequest.startDate ?? null,
+          endDate: reviewRequest.endDate ?? null,
         },
         siblingCloses,
       });

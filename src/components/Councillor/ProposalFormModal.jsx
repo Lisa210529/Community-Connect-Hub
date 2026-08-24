@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Modal from '../ui/Modal';
 import { readFileAsDataUrl } from '../../utils/fileHelpers';
 
@@ -29,15 +29,30 @@ function guessMimeType(file) {
   return map[ext] || 'application/octet-stream';
 }
 
+const EMPTY_FORM = {
+  startDate: '',
+  endDate: '',
+  estimatedCost: '',
+};
+
 export default function ProposalFormModal({ open, need, ward, wardId, onSubmit, onClose }) {
   const inputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [fileError, setFileError] = useState('');
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedFile(null);
+    setForm(EMPTY_FORM);
+    setFileError('');
+  }, [open, need?.id]);
 
   function handleClose() {
     if (uploading) return;
     setSelectedFile(null);
+    setForm(EMPTY_FORM);
     setFileError('');
     onClose();
   }
@@ -68,6 +83,30 @@ export default function ProposalFormModal({ open, need, ward, wardId, onSubmit, 
       return;
     }
 
+    if (!form.startDate || !form.endDate) {
+      setFileError('Please enter the project start and end dates.');
+      return;
+    }
+
+    const start = new Date(form.startDate);
+    const end = new Date(form.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      setFileError('Please enter valid start and end dates.');
+      return;
+    }
+    if (end <= start) {
+      setFileError('End date must be after the start date.');
+      return;
+    }
+
+    const estimatedCost = form.estimatedCost.trim()
+      ? Number(form.estimatedCost)
+      : null;
+    if (form.estimatedCost.trim() && (!estimatedCost || estimatedCost <= 0)) {
+      setFileError('Enter a valid estimated cost, or leave it blank.');
+      return;
+    }
+
     setUploading(true);
     setFileError('');
 
@@ -84,6 +123,10 @@ export default function ProposalFormModal({ open, need, ward, wardId, onSubmit, 
         residentIds: need.residentIds ?? [],
         requestIds: need.requestIds ?? [],
         projectTitle: `${need.category} Project - ${need.zone}, ${ward || need.ward}`,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        estimatedCost,
+        amountRequested: estimatedCost,
         proposalFileData,
         proposalFileName: selectedFile.name,
         proposalFileType: guessMimeType(selectedFile),
@@ -93,6 +136,7 @@ export default function ProposalFormModal({ open, need, ward, wardId, onSubmit, 
       });
 
       setSelectedFile(null);
+      setForm(EMPTY_FORM);
       onClose();
     } catch (err) {
       console.error('Proposal conversion error:', err);
@@ -116,6 +160,48 @@ export default function ProposalFormModal({ open, need, ward, wardId, onSubmit, 
       )}
 
       <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-cyber-muted mb-1">Project start date</label>
+            <input
+              type="date"
+              className="cyber-input w-full"
+              value={form.startDate}
+              onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))}
+              disabled={uploading}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-cyber-muted mb-1">Project end date</label>
+            <input
+              type="date"
+              className="cyber-input w-full"
+              value={form.endDate}
+              min={form.startDate || undefined}
+              onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))}
+              disabled={uploading}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-cyber-muted mb-1">Estimated cost (K)</label>
+            <input
+              type="number"
+              min="1"
+              className="cyber-input w-full"
+              value={form.estimatedCost}
+              onChange={(e) => setForm((prev) => ({ ...prev, estimatedCost: e.target.value }))}
+              placeholder="30000"
+              disabled={uploading}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-cyber-muted">
+          Residents can rate this project from the mid-date between start and end until completion,
+          with photo evidence for funding stakeholders.
+        </p>
+
         <button
           type="button"
           onClick={() => inputRef.current?.click()}

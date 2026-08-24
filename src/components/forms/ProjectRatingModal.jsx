@@ -78,8 +78,9 @@ export default function ProjectRatingModal({ open, project, onClose, onSubmit, s
     <Modal open={open} onClose={onClose} title={`Rate Project — ${project.name}`} wide>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-cyber-muted">
-          Rate this funded project in your ward and upload a photo so funding stakeholders can see
-          implementation evidence. Acquittal and formal reports are handled by the WDC.
+          Rate this project once from the mid-date until completion and upload a photo so funding
+          stakeholders and provincial government can see implementation progress. WDC handles
+          acquittal and formal reports.
         </p>
 
         {RATING_CATEGORIES.map((category) => (

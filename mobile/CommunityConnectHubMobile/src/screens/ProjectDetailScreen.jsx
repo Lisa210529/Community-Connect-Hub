@@ -9,6 +9,7 @@ import {
   createRating,
 } from '../services/firebaseService';
 import { colors } from '../constants/colors';
+import { canResidentRateProject, getRatingEligibility } from '../constants/ratings';
 
 const CATEGORIES = [
   { key: 'category1Score', label: 'Quality of Work' },
@@ -17,8 +18,6 @@ const CATEGORIES = [
   { key: 'category4Score', label: 'Communication' },
   { key: 'category5Score', label: 'Overall Satisfaction' },
 ];
-
-const RATEABLE = new Set(['funded', 'implemented', 'in progress', 'completed']);
 
 function StarRow({ value, onChange }) {
   return (
@@ -56,7 +55,8 @@ export default function ProjectDetailScreen({ route, navigation }) {
     load().catch(console.error);
   }, [projectId, user]);
 
-  const canRate = project && RATEABLE.has(String(project.status ?? '').toLowerCase());
+  const eligibility = project ? getRatingEligibility(project, { alreadyRated }) : null;
+  const canRate = project && canResidentRateProject(project, { alreadyRated });
 
   async function submitRating() {
     const missing = CATEGORIES.find((c) => !scores[c.key] || scores[c.key] < 1);
@@ -103,7 +103,23 @@ export default function ProjectDetailScreen({ route, navigation }) {
       {project.location ? <Text style={styles.body}>Location: {project.location}</Text> : null}
       {project.description ? <Text style={styles.body}>{project.description}</Text> : null}
 
-      {canRate && !alreadyRated ? (
+      {project.startDate && project.endDate ? (
+        <Text style={styles.body}>
+          Timeline: {project.startDate} – {project.endDate}
+        </Text>
+      ) : null}
+
+      {eligibility?.reason === 'before_mid_date' && !alreadyRated ? (
+        <Text style={styles.muted}>
+          Rating opens{' '}
+          {eligibility.midDate
+            ? eligibility.midDate.toLocaleDateString('en-PG')
+            : 'at the project mid-date'}
+          .
+        </Text>
+      ) : null}
+
+      {canRate ? (
         <Card>
           <Text style={styles.section}>Rate this project</Text>
           {CATEGORIES.map((c) => (

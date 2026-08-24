@@ -6,7 +6,7 @@ import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
 import ProjectRatingModal from '../../components/forms/ProjectRatingModal';
 import { useAuth } from '../../context/AuthContext';
 import { firestoreService, loadHybridCollection } from '../../services/firestoreService';
-import { canRateProjectStatus } from '../../constants/ratings';
+import { canResidentRateProject, getRatingEligibility } from '../../constants/ratings';
 import { matchesWard, resolveWardId } from '../../utils/wdcHelpers';
 
 function formatDate(iso) {
@@ -71,8 +71,17 @@ export default function ResidentDashboard() {
 
   const rateableProjects = useMemo(
     () => projects.filter(
-      (p) => canRateProjectStatus(p.status) && !ratedProjectIds.has(p.id),
+      (p) => canResidentRateProject(p, { alreadyRated: ratedProjectIds.has(p.id) }),
     ),
+    [projects, ratedProjectIds],
+  );
+
+  const upcomingRatingProjects = useMemo(
+    () => projects.filter((p) => {
+      if (ratedProjectIds.has(p.id)) return false;
+      const eligibility = getRatingEligibility(p, { alreadyRated: false });
+      return eligibility.reason === 'before_mid_date';
+    }),
     [projects, ratedProjectIds],
   );
 
@@ -91,6 +100,10 @@ export default function ResidentDashboard() {
 
   async function handleSubmitRating({ scores, overallScore, comment, evidencePhotoName, evidencePhotoData }) {
     if (!ratingProject || !residentId) return;
+    if (!canResidentRateProject(ratingProject, { alreadyRated: ratedProjectIds.has(ratingProject.id) })) {
+      setError('This project is not open for rating yet. Rating opens at the project mid-date.');
+      return;
+    }
     setSavingRating(true);
     setError('');
     try {
@@ -173,17 +186,35 @@ export default function ResidentDashboard() {
           <h2 className="text-lg font-semibold text-cyber-text">Rate Funded Projects</h2>
         </div>
         <p className="text-sm text-cyber-muted mb-4">
-          Rate projects funded in your ward and upload photo evidence for stakeholders. WDC handles
-          acquittal and formal project reports.
+          Rate funded projects in your ward from the project mid-date until completion. Upload photo
+          evidence so funding stakeholders and provincial government can monitor progress.
         </p>
         {loading ? (
           <p className="text-cyber-muted text-sm animate-pulse">Loading projects…</p>
-        ) : rateableProjects.length === 0 ? (
+        ) : rateableProjects.length === 0 && upcomingRatingProjects.length === 0 ? (
           <p className="text-cyber-muted text-sm">
-            No funded projects ready to rate right now. Check back after a project is funded in your ward.
+            No funded projects ready to rate right now. Check back after a project reaches its
+            mid-date in your ward.
           </p>
         ) : (
           <div className="space-y-3">
+            {upcomingRatingProjects.map((project) => {
+              const { midDate } = getRatingEligibility(project);
+              return (
+                <div
+                  key={`upcoming-${project.id}`}
+                  className="p-4 rounded-lg bg-slate-bg/60 border border-slate-border border-dashed"
+                >
+                  <p className="font-medium text-cyber-text">{project.name}</p>
+                  <p className="text-xs text-cyber-muted mt-0.5">
+                    Rating opens {midDate ? formatDate(midDate.toISOString()) : 'at mid-date'}
+                    {project.startDate && project.endDate
+                      ? ` (${formatDate(project.startDate)} – ${formatDate(project.endDate)})`
+                      : ''}
+                  </p>
+                </div>
+              );
+            })}
             {rateableProjects.map((project) => (
               <div
                 key={project.id}
@@ -193,6 +224,9 @@ export default function ResidentDashboard() {
                   <p className="font-medium text-cyber-text">{project.name}</p>
                   <p className="text-xs text-cyber-muted mt-0.5">
                     {project.category} · {project.zone || project.ward} · {formatDate(project.dateLogged)}
+                    {project.startDate && project.endDate
+                      ? ` · ${formatDate(project.startDate)} – ${formatDate(project.endDate)}`
+                      : ''}
                   </p>
                   {project.fundingSource && (
                     <p className="text-xs text-cyber-muted mt-1">
