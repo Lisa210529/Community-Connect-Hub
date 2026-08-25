@@ -194,3 +194,12 @@ export const REPORT_STATUSES = [
 export function reportStatusLabel(status) {
   return REPORT_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
+
+/** WDC office titles — Chairman is the elected Ward Councillor. */
+export {
+  WDC_POSITION_OPTIONS,
+  WDC_POSITION_LABELS,
+  resolveWdcPositionLabel,
+  resolveWdcRoleKey,
+  getWdcRoleDashboard,
+} from '../constants/wdcRoles';

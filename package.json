@@ -14,7 +14,8 @@
     "seed:emulator": "node scripts/seed-emulator.js",
     "seed:production": "node scripts/seed-production.js",
     "seed:pre-registered": "node scripts/seed-pre-registered.js",
-    "cleanup:production": "node scripts/cleanup-production.js"
+    "cleanup:production": "node scripts/cleanup-production.js",
+    "sync:auth-email": "node scripts/sync-auth-email.js"
   },
   "dependencies": {
     "bootstrap": "^5.3.3",

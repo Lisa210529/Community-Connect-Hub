@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ProfilePage from '../Profile/ProfilePage';
 import StatCard from '../../components/ui/StatCard';
@@ -16,12 +16,7 @@ import { firestoreService } from '../../services/firestoreService';
 import { downloadBase64File } from '../../utils/fileHelpers';
 import { completeApprovedFunding } from '../../utils/fundingRepair';
 
-const TABS = [
-  { id: 'overview', label: 'Overview', icon: 'fa-th-large' },
-  { id: 'funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
-  { id: 'approved', label: 'Approved Projects', icon: 'fa-check-circle' },
-  { id: 'profile', label: 'Profile', icon: 'fa-user' },
-];
+const STAKEHOLDER_TAB_IDS = ['overview', 'funding-requests', 'approved', 'profile'];
 
 const EMPTY_APPROVE_FORM = {
   amountApproved: '',
@@ -53,7 +48,7 @@ export default function StakeholderDashboard() {
   const stakeholderType = getStakeholderType(user);
   const basePath = ROLE_DASHBOARD_PATHS[displayRole] ?? ROLE_DASHBOARD_PATHS[role] ?? '/dashboard/open-member';
 
-  const VALID_TABS = new Set(TABS.map((t) => t.id));
+  const VALID_TABS = new Set(STAKEHOLDER_TAB_IDS);
   const activeTab = tabParam && VALID_TABS.has(tabParam) ? tabParam : 'overview';
 
   const [loading, setLoading] = useState(true);
@@ -360,31 +355,6 @@ export default function StakeholderDashboard() {
     }
   }
 
-  function renderTabNav() {
-    return (
-      <nav className="flex flex-wrap gap-2 border-b border-slate-border pb-3">
-        {TABS.map((tab) => {
-          const path = tab.id === 'overview' ? basePath : `${basePath}/${tab.id}`;
-          const active = activeTab === tab.id;
-          return (
-            <Link
-              key={tab.id}
-              to={path}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-cyber-accent/15 text-cyber-accent border border-cyber-accent/40'
-                  : 'text-cyber-muted hover:text-cyber-text hover:bg-slate-bg'
-              }`}
-            >
-              <i className={`fas ${tab.icon} mr-2`} />
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
-    );
-  }
-
   function renderOverview() {
     return (
       <>
@@ -612,8 +582,6 @@ export default function StakeholderDashboard() {
           {error}
         </div>
       )}
-
-      {renderTabNav()}
 
       {activeTab === 'overview' && renderOverview()}
       {activeTab === 'funding-requests' && renderFundingRequests()}

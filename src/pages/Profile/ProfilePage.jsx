@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { auth } from '../../services/firebase';
 import { validatePassword } from '../../utils/validation';
 import { buildOtpAuthUrl, generateMfaSecret, verifyTotpCode, generateSmsCode } from '../../utils/mfaHelpers';
 import { getStore, setCollection } from '../../services/localStorageService';
 
 export default function ProfilePage() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, signInEmail, emailSyncRequired } = useAuth();
   const [form, setForm] = useState({
     firstName: user?.firstName ?? '',
     lastName: user?.lastName ?? '',
@@ -14,19 +15,39 @@ export default function ProfilePage() {
     ward: user?.ward ?? '',
   });
   const [passwordForm, setPasswordForm] = useState({ current: '', newPass: '', confirm: '' });
+  const [emailPassword, setEmailPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
   const [mfaEnabled, setMfaEnabled] = useState(user?.mfaEnabled ?? false);
   const [mfaType, setMfaType] = useState(user?.mfaType ?? 'totp');
   const [mfaSecret, setMfaSecret] = useState(user?.mfaSecret ?? '');
   const [verifyCode, setVerifyCode] = useState('');
   const [setupStep, setSetupStep] = useState(false);
 
-  function saveProfile(e) {
+  const authSignInEmail = signInEmail || auth.currentUser?.email || '';
+  const emailChanged =
+    form.email.trim().toLowerCase() !== authSignInEmail.trim().toLowerCase();
+
+  async function saveProfile(e) {
     e.preventDefault();
-    updateProfile(form);
-    setMessage('Profile updated successfully.');
+    setSavingProfile(true);
+    setMessage('');
     setError('');
+
+    try {
+      await updateProfile(form, emailChanged ? { currentPassword: emailPassword } : {});
+      setMessage(
+        emailChanged
+          ? 'Profile updated. Use your new email address the next time you sign in.'
+          : 'Profile updated successfully.',
+      );
+      setEmailPassword('');
+    } catch (err) {
+      setError(err.message || 'Failed to update profile.');
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
   function changePassword(e) {
@@ -106,6 +127,17 @@ export default function ProfilePage() {
       {message && <div className="mb-4 p-3 rounded-lg bg-status-completed/10 border border-status-completed/30 text-status-completed text-sm">{message}</div>}
       {error && <div className="mb-4 p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">{error}</div>}
 
+      {emailSyncRequired && (
+        <div className="mb-4 p-4 rounded-lg bg-status-pending/10 border border-status-pending/40 text-sm">
+          <p className="font-medium text-status-pending mb-1">Update your sign-in email</p>
+          <p className="text-cyber-muted">
+            You currently sign in with <strong className="text-text-primary">{authSignInEmail}</strong>.
+            Enter your password below and save to sign in with{' '}
+            <strong className="text-text-primary">{form.email.trim()}</strong> instead.
+          </p>
+        </div>
+      )}
+
       <div className="cyber-card mb-6">
         <h2 className="font-semibold mb-4">Edit Profile</h2>
         <form onSubmit={saveProfile} className="space-y-3">
@@ -122,9 +154,32 @@ export default function ProfilePage() {
           {['email', 'phone', 'ward'].map((f) => (
             <div key={f}>
               <label className="text-xs text-cyber-muted capitalize">{f}</label>
-              <input className="cyber-input" value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
+              <input
+                className="cyber-input"
+                type={f === 'email' ? 'email' : 'text'}
+                value={form[f]}
+                onChange={(e) => setForm({ ...form, [f]: e.target.value })}
+              />
             </div>
           ))}
+          {emailChanged && (
+            <div>
+              <label className="text-xs text-cyber-muted">Current Password</label>
+              <input
+                type="password"
+                className="cyber-input"
+                value={emailPassword}
+                onChange={(e) => setEmailPassword(e.target.value)}
+                placeholder="Required to update your sign-in email"
+                required
+              />
+              <p className="text-xs text-cyber-muted mt-1">
+                {authSignInEmail && authSignInEmail !== form.email.trim().toLowerCase()
+                  ? `You currently sign in with ${authSignInEmail}. Enter your password to sign in with ${form.email.trim()} instead.`
+                  : `Your sign-in email will change to ${form.email.trim()}. Use that address after you sign out.`}
+              </p>
+            </div>
+          )}
           <div>
             <label className="text-xs text-cyber-muted">NID (National Identification Number)</label>
             <input
@@ -135,7 +190,9 @@ export default function ProfilePage() {
             />
             <p className="text-xs text-cyber-muted mt-1">Your NID cannot be changed after registration.</p>
           </div>
-          <button type="submit" className="cyber-btn-primary">Save Profile</button>
+          <button type="submit" className="cyber-btn-primary" disabled={savingProfile}>
+            {savingProfile ? 'Saving…' : 'Save Profile'}
+          </button>
         </form>
       </div>
 

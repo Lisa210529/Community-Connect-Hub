@@ -11,6 +11,21 @@ import { getWardSelectOptions } from '../../constants/wards';
 import Logo from '../../components/common/Logo';
 
 const RESIDENT_WARD_OPTIONS = getWardSelectOptions();
+const NO_AUTOFILL = 'one-time-code';
+
+function unlockInput(e) {
+  const input = e.currentTarget;
+  if (input.readOnly) {
+    if (e.type === 'mousedown') {
+      e.preventDefault();
+    }
+    input.readOnly = false;
+    input.removeAttribute('readonly');
+    if (e.type === 'mousedown') {
+      input.focus();
+    }
+  }
+}
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -33,8 +48,19 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fieldsActive, setFieldsActive] = useState(false);
+  const [termsError, setTermsError] = useState('');
   const [nidFeedback, setNidFeedback] = useState({ text: '', type: 'info' });
   const passwordCheck = validatePassword(formData.password);
+
+  function activateFields() {
+    setFieldsActive(true);
+  }
+
+  function handleInputReady(e) {
+    unlockInput(e);
+    activateFields();
+  }
 
   function updateField(field, value) {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -67,6 +93,13 @@ export default function RegisterPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setTermsError('');
+
+    if (!formData.acceptedTerms) {
+      setTermsError('You must accept the Terms & Conditions before you can register.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -88,9 +121,6 @@ export default function RegisterPage() {
       if (!formData.wardId) {
         throw new Error('Please select your ward.');
       }
-      if (!formData.acceptedTerms) {
-        throw new Error('You must accept the Terms & Conditions.');
-      }
 
       await registerUser(formData);
       navigate('/login', {
@@ -108,6 +138,19 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-slate-bg flex items-center justify-center p-4">
+      {/* Decoy fields absorb browser login/address autofill away from the real form */}
+      <form
+        aria-hidden="true"
+        tabIndex={-1}
+        autoComplete="on"
+        className="absolute opacity-0 h-0 w-0 overflow-hidden pointer-events-none"
+      >
+        <input type="text" name="username" autoComplete="username" tabIndex={-1} defaultValue="" />
+        <input type="password" name="password" autoComplete="current-password" tabIndex={-1} defaultValue="" />
+        <input type="text" name="email" autoComplete="email" tabIndex={-1} defaultValue="" />
+        <input type="text" name="given-name" autoComplete="given-name" tabIndex={-1} defaultValue="" />
+      </form>
+
       <div className="cyber-card w-full max-w-lg shadow-glow">
         <div className="flex flex-col items-center text-center mb-6">
           <Logo />
@@ -120,36 +163,78 @@ export default function RegisterPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4"
+          autoComplete="off"
+          data-form-type="other"
+        >
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm text-cyber-muted mb-1">First Name</label>
+              <label className="block text-sm text-cyber-muted mb-1" htmlFor="cch-resident-given">
+                First Name
+              </label>
               <input
+                id="cch-resident-given"
+                name="cch-resident-given"
                 className="cyber-input"
                 value={formData.firstName}
                 onChange={(e) => updateField('firstName', e.target.value)}
+                autoComplete={NO_AUTOFILL}
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                readOnly={!fieldsActive}
+                onMouseDown={handleInputReady}
+                onFocus={handleInputReady}
                 required
               />
             </div>
             <div>
-              <label className="block text-sm text-cyber-muted mb-1">Last Name</label>
+              <label className="block text-sm text-cyber-muted mb-1" htmlFor="cch-resident-family">
+                Last Name
+              </label>
               <input
+                id="cch-resident-family"
+                name="cch-resident-family"
                 className="cyber-input"
                 value={formData.lastName}
                 onChange={(e) => updateField('lastName', e.target.value)}
+                autoComplete={NO_AUTOFILL}
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                readOnly={!fieldsActive}
+                onMouseDown={handleInputReady}
+                onFocus={handleInputReady}
                 required
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-cyber-muted mb-1">NID (10 digits)</label>
+            <label className="block text-sm text-cyber-muted mb-1" htmlFor="cch-resident-nid">
+              NID (10 digits)
+            </label>
             <input
+              id="cch-resident-nid"
+              name="cch-resident-nid"
               className="cyber-input"
               value={formData.nid}
               onChange={(e) => updateField('nid', e.target.value.replace(/\D/g, '').slice(0, 10))}
               onBlur={handleNidBlur}
+              autoComplete={NO_AUTOFILL}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              readOnly={!fieldsActive}
+              onMouseDown={handleInputReady}
+              onFocus={handleInputReady}
               maxLength={10}
+              inputMode="numeric"
               required
             />
             {nidFeedback.text && (
@@ -158,23 +243,47 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-cyber-muted mb-1">Email</label>
+            <label className="block text-sm text-cyber-muted mb-1" htmlFor="cch-resident-contact">
+              Email
+            </label>
             <input
-              type="email"
+              id="cch-resident-contact"
+              name="cch-resident-contact"
+              type="text"
+              inputMode="email"
               className="cyber-input"
               value={formData.email}
               onChange={(e) => updateField('email', e.target.value)}
+              autoComplete={NO_AUTOFILL}
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              readOnly={!fieldsActive}
+              onMouseDown={handleInputReady}
+              onFocus={handleInputReady}
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-cyber-muted mb-1">Phone</label>
+            <label className="block text-sm text-cyber-muted mb-1" htmlFor="cch-resident-phone">
+              Phone
+            </label>
             <input
+              id="cch-resident-phone"
+              name="cch-resident-phone"
               type="tel"
               className="cyber-input"
               value={formData.phone}
               onChange={(e) => updateField('phone', e.target.value)}
+              autoComplete={NO_AUTOFILL}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              readOnly={!fieldsActive}
+              onMouseDown={handleInputReady}
+              onFocus={handleInputReady}
               required
             />
           </div>
@@ -195,12 +304,26 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-cyber-muted mb-1">Password</label>
+            <label className="block text-sm text-cyber-muted mb-1" htmlFor="cch-resident-secret">
+              Password
+            </label>
             <input
-              type="password"
-              className="cyber-input"
+              id="cch-resident-secret"
+              name="cch-resident-secret"
+              type="text"
+              className="cyber-input [webkit-text-security:disc]"
+              style={{ WebkitTextSecurity: 'disc' }}
               value={formData.password}
               onChange={(e) => updateField('password', e.target.value)}
+              autoComplete={NO_AUTOFILL}
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              readOnly={!fieldsActive}
+              onMouseDown={handleInputReady}
+              onFocus={handleInputReady}
               required
             />
             {formData.password && (
@@ -218,28 +341,67 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-cyber-muted mb-1">Confirm Password</label>
+            <label className="block text-sm text-cyber-muted mb-1" htmlFor="cch-resident-secret-confirm">
+              Confirm Password
+            </label>
             <input
-              type="password"
-              className="cyber-input"
+              id="cch-resident-secret-confirm"
+              name="cch-resident-secret-confirm"
+              type="text"
+              className="cyber-input [webkit-text-security:disc]"
+              style={{ WebkitTextSecurity: 'disc' }}
               value={formData.confirmPassword}
               onChange={(e) => updateField('confirmPassword', e.target.value)}
+              autoComplete={NO_AUTOFILL}
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              readOnly={!fieldsActive}
+              onMouseDown={handleInputReady}
+              onFocus={handleInputReady}
               required
             />
           </div>
 
-          <label className="flex items-start gap-2 text-sm text-cyber-muted cursor-pointer">
-            <input
-              type="checkbox"
-              checked={formData.acceptedTerms}
-              onChange={(e) => updateField('acceptedTerms', e.target.checked)}
-              className="mt-1 rounded border-slate-border"
-              required
-            />
-            <span>I agree to the Terms &amp; Conditions</span>
-          </label>
+          <div>
+            <label
+              htmlFor="register-terms"
+              className="flex items-start gap-2 text-sm text-cyber-muted cursor-pointer"
+            >
+              <input
+                id="register-terms"
+                type="checkbox"
+                checked={formData.acceptedTerms}
+                onChange={(e) => {
+                  updateField('acceptedTerms', e.target.checked);
+                  if (e.target.checked) setTermsError('');
+                }}
+                className="mt-1 rounded border-slate-border"
+              />
+              <span>I agree to the Terms &amp; Conditions</span>
+            </label>
+            {termsError && (
+              <p className="mt-1.5 text-xs text-status-rejected">{termsError}</p>
+            )}
+            {!formData.acceptedTerms && !termsError && (
+              <p className="mt-1.5 text-xs text-cyber-muted">
+                You must accept the Terms &amp; Conditions to register.
+              </p>
+            )}
+          </div>
 
-          <button type="submit" className="cyber-btn-primary w-full" disabled={loading}>
+          <button
+            type="submit"
+            className="cyber-btn-primary w-full"
+            disabled={loading || !formData.acceptedTerms}
+            title={
+              !formData.acceptedTerms
+                ? 'Accept the Terms & Conditions to register'
+                : undefined
+            }
+          >
             {loading ? 'Creating account…' : 'Register as Resident'}
           </button>
         </form>

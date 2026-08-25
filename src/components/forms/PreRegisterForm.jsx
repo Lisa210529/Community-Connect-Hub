@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PRE_REGISTER_ROLES } from '../../constants';
+import { WDC_POSITION_OPTIONS } from '../../constants/wdcRoles';
 
 const WARD_OPTIONS = Array.from({ length: 10 }, (_, i) => `Ward ${i + 1}`);
 
@@ -29,7 +30,8 @@ export default function PreRegisterForm({ onSubmit, loading }) {
     onSubmit(form, setError);
   }
 
-  const needsWard = ['councillor'].includes(form.role);
+  const needsWard = ['councillor', 'wdc-member'].includes(form.role);
+  const isWdcMember = form.role === 'wdc-member';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,15 +82,31 @@ export default function PreRegisterForm({ onSubmit, loading }) {
             ))}
           </select>
         </div>
-        <div className="md:col-span-2">
-          <label className="block text-sm text-cyber-muted mb-1">Position Title</label>
-          <input
-            className="cyber-input"
-            value={form.position}
-            onChange={(e) => update('position', e.target.value)}
-            placeholder="e.g. Ward 5 Councillor"
-            required
-          />
+        <div className={needsWard && !isWdcMember ? '' : 'md:col-span-2'}>
+          <label className="block text-sm text-cyber-muted mb-1">
+            {isWdcMember ? 'WDC Position' : 'Position Title'}
+          </label>
+          {isWdcMember ? (
+            <select
+              className="cyber-select"
+              value={form.position}
+              onChange={(e) => update('position', e.target.value)}
+              required
+            >
+              <option value="">Select WDC position…</option>
+              {WDC_POSITION_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              className="cyber-input"
+              value={form.position}
+              onChange={(e) => update('position', e.target.value)}
+              placeholder="e.g. Ward 5 Councillor"
+              required
+            />
+          )}
         </div>
         {needsWard && (
           <div>

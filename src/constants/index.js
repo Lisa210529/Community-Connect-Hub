@@ -1,4 +1,5 @@
 import { normalizeRole } from './roleMapping';
+import { getWdcNavItems } from './wdcRoles';
 import { WARDS, getWardSelectLabel } from './wards';
 
 export const ROLES = {
@@ -111,9 +112,9 @@ export const PASSWORD_RULE_LABELS = {
 
 export const DOCUMENT_TEMPLATES = [
   'Meeting Minutes',
-  'Project Reports',
-  'Resolutions',
-  'Official Letters',
+  'Project Report',
+  'WDC Resolution',
+  'Acquittal Report',
 ];
 
 const PROJECT_NAV = [
@@ -139,7 +140,7 @@ export const NAV_ITEMS = {
     { path: '/resolutions', label: 'Resolutions', icon: 'fa-gavel' },
     { path: '/projects', label: 'Projects', icon: 'fa-folder-open' },
     { path: '/dashboard/wdc?tab=reports', label: 'Reports', icon: 'fa-chart-bar' },
-    { path: '/documents', label: 'Documents', icon: 'fa-file-alt' },
+    { path: '/documents', label: 'WDC Documents', icon: 'fa-file-alt' },
     { path: '/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
@@ -150,7 +151,6 @@ export const NAV_ITEMS = {
     { path: '/complaints', label: 'Complaints', icon: 'fa-exclamation-circle' },
     { path: '/meetings', label: 'Meetings', icon: 'fa-calendar-alt' },
     { path: '/resolutions', label: 'Resolutions', icon: 'fa-gavel' },
-    { path: '/documents', label: 'Documents', icon: 'fa-file-alt' },
     { path: '/acquittals', label: 'Acquittals', icon: 'fa-file-invoice-dollar' },
     { path: '/dashboard/councillor/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
     { path: '/dashboard/councillor/letters', label: 'Letters', icon: 'fa-file-alt' },
@@ -223,7 +223,6 @@ export const NAV_ITEMS = {
     { path: '/admin/pre-register', label: 'Pre-Register', icon: 'fa-user-plus' },
     { path: '/admin/approvals', label: 'Approvals', icon: 'fa-user-clock' },
     { path: '/admin/audit-logs', label: 'Audit Logs', icon: 'fa-clipboard-list' },
-    { path: '/documents', label: 'Documents', icon: 'fa-file-alt' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
   ],
 };
@@ -280,7 +279,7 @@ export function getNavForRole(role, rawRole, user) {
   }
 
   if (normalized === 'wdc-member' || rawNormalized === 'wdc-member') {
-    return NAV_ITEMS['wdc-member'];
+    return getWdcNavItems(user);
   }
 
   return NAV_ITEMS[normalized] ?? NAV_ITEMS[role] ?? NAV_ITEMS.resident;

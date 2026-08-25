@@ -19,14 +19,13 @@ import {
   REQUESTS_THRESHOLD,
   REPORT_STATUSES,
   reportStatusLabel,
+  resolveWdcPositionLabel,
 } from '../../utils/wdcHelpers';
-
-const TABS = [
-  { id: 'overview', label: 'Overview', icon: 'fa-th-large' },
-  { id: 'requests', label: 'Requests', icon: 'fa-inbox' },
-  { id: 'community-needs', label: 'Community Needs', icon: 'fa-users' },
-  { id: 'reports', label: 'Reports', icon: 'fa-chart-bar' },
-];
+import {
+  getWdcRoleDashboard,
+  wdcRoleCanAccessTab,
+} from '../../constants/wdcRoles';
+import { Link } from 'react-router-dom';
 
 const EMPTY_REPORT = {
   projectId: '',
@@ -48,12 +47,15 @@ async function loadWardCollection(collectionName, user, fetchAllFn) {
 
 export default function WDCDashboard() {
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const wardNumber = getWardNumber(user);
   const wardId = resolveWardId(user);
   const llg = user?.llg ?? 'Madang Urban LLG';
   const activeTab = searchParams.get('tab') || 'overview';
+  const roleDashboard = getWdcRoleDashboard(user);
+  const positionLabel = resolveWdcPositionLabel(user);
+  const tabAllowed = wdcRoleCanAccessTab(user, activeTab);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -178,14 +180,6 @@ export default function WDCDashboard() {
     loadDashboardData();
   }, [loadDashboardData]);
 
-  function setTab(tabId) {
-    if (tabId === 'overview') {
-      setSearchParams({});
-    } else {
-      setSearchParams({ tab: tabId });
-    }
-  }
-
   async function handleForwardToCouncillor(group) {
     if (!group.canForward) return;
 
@@ -277,53 +271,116 @@ export default function WDCDashboard() {
   }
 
   function renderOverview() {
+    const statDefs = {
+      newRequests: { label: 'New Requests', value: overviewStats.newRequests, icon: 'fa-inbox' },
+      communityNeedsCount: {
+        label: 'Community Needs',
+        value: overviewStats.communityNeedsCount,
+        icon: 'fa-users',
+        accent: 'text-status-pending',
+      },
+      activeProjects: {
+        label: 'Active Projects',
+        value: overviewStats.activeProjects,
+        icon: 'fa-folder-open',
+        accent: 'text-status-active',
+      },
+      pendingReports: {
+        label: 'Pending Reports',
+        value: overviewStats.pendingReports,
+        icon: 'fa-file-alt',
+        accent: 'text-cyber-muted',
+      },
+    };
+
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="New Requests" value={overviewStats.newRequests} icon="fa-inbox" />
-          <StatCard
-            label="Community Needs"
-            value={overviewStats.communityNeedsCount}
-            icon="fa-users"
-            accent="text-status-pending"
-          />
-          <StatCard
-            label="Active Projects"
-            value={overviewStats.activeProjects}
-            icon="fa-folder-open"
-            accent="text-status-active"
-          />
-          <StatCard
-            label="Pending Reports"
-            value={overviewStats.pendingReports}
-            icon="fa-file-alt"
-            accent="text-cyber-muted"
-          />
+        <section className="cyber-card">
+          <h2 className="text-lg font-semibold text-cyber-text mb-2">Your WDC responsibilities</h2>
+          <p className="text-sm text-cyber-muted mb-3">{roleDashboard.subtitle}</p>
+          <ul className="text-sm text-cyber-muted space-y-1 list-disc list-inside">
+            {roleDashboard.duties.map((duty) => (
+              <li key={duty}>{duty}</li>
+            ))}
+          </ul>
+        </section>
+
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${roleDashboard.statLabels.length > 2 ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
+          {roleDashboard.statLabels.map((key) => {
+            const stat = statDefs[key];
+            if (!stat) return null;
+            return (
+              <StatCard
+                key={key}
+                label={stat.label}
+                value={stat.value}
+                icon={stat.icon}
+                accent={stat.accent}
+              />
+            );
+          })}
         </div>
 
-        <section className="cyber-card">
-          <h2 className="text-lg font-semibold text-cyber-text mb-4">Recent Community Needs</h2>
-          {communityNeedGroups.length === 0 ? (
-            <p className="text-cyber-muted text-sm">No grouped community needs yet (requires {REQUESTS_THRESHOLD}+ residents).</p>
-          ) : (
-            <div className="space-y-3">
-              {communityNeedGroups.slice(0, 5).map((group) => (
-                <div
-                  key={group.groupKey}
-                  className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-slate-bg border border-slate-border"
-                >
-                  <div>
-                    <p className="font-medium text-cyber-text">{group.category}</p>
-                    <p className="text-xs text-cyber-muted">
-                      {group.zone} · {group.residentCount} residents · Ward {wardNumber}
-                    </p>
+        {roleDashboard.overviewSection === 'communityNeeds' && (
+          <section className="cyber-card">
+            <h2 className="text-lg font-semibold text-cyber-text mb-4">Recent Community Needs</h2>
+            {communityNeedGroups.length === 0 ? (
+              <p className="text-cyber-muted text-sm">No grouped community needs yet (requires {REQUESTS_THRESHOLD}+ residents).</p>
+            ) : (
+              <div className="space-y-3">
+                {communityNeedGroups.slice(0, 5).map((group) => (
+                  <div
+                    key={group.groupKey}
+                    className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-slate-bg border border-slate-border"
+                  >
+                    <div>
+                      <p className="font-medium text-cyber-text">{group.category}</p>
+                      <p className="text-xs text-cyber-muted">
+                        {group.zone} · {group.residentCount} residents · Ward {wardNumber}
+                      </p>
+                    </div>
+                    <StatusBadge status={getGroupStatusLabel(group)} />
                   </div>
-                  <StatusBadge status={getGroupStatusLabel(group)} />
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {roleDashboard.overviewSection === 'secretariat' && (
+          <section className="cyber-card">
+            <h2 className="text-lg font-semibold text-cyber-text mb-4">Secretariat quick actions</h2>
+            <div className="flex flex-wrap gap-3">
+              <Link to="/meetings" className="cyber-btn-secondary text-sm">WDC Meetings</Link>
+              <Link to="/resolutions" className="cyber-btn-secondary text-sm">Resolutions</Link>
+              <Link to="/documents" className="cyber-btn-primary text-sm">WDC Documents</Link>
             </div>
-          )}
-        </section>
+          </section>
+        )}
+
+        {roleDashboard.overviewSection === 'finance' && (
+          <section className="cyber-card">
+            <h2 className="text-lg font-semibold text-cyber-text mb-4">Finance &amp; acquittal</h2>
+            <p className="text-sm text-cyber-muted mb-3">
+              Prepare project reports and acquittal documents, then obtain Chairman co-signature before LLG submission.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link to="/dashboard/wdc?tab=reports" className="cyber-btn-secondary text-sm">Ward Reports</Link>
+              <Link to="/documents" className="cyber-btn-primary text-sm">Acquittal Documents</Link>
+              <Link to="/acquittals" className="cyber-btn-secondary text-sm">Acquittals</Link>
+            </div>
+          </section>
+        )}
+
+        {roleDashboard.overviewSection === 'projects' && (
+          <section className="cyber-card">
+            <h2 className="text-lg font-semibold text-cyber-text mb-4">Ward projects</h2>
+            <p className="text-sm text-cyber-muted mb-3">
+              Review progress on funded and in-progress ward projects for Ward {wardNumber}.
+            </p>
+            <Link to="/projects" className="cyber-btn-primary text-sm">View Projects</Link>
+          </section>
+        )}
       </div>
     );
   }
@@ -528,6 +585,18 @@ export default function WDCDashboard() {
       return <p className="text-cyber-muted text-sm animate-pulse py-8">Loading dashboard data…</p>;
     }
 
+    if (activeTab !== 'overview' && !tabAllowed) {
+      return (
+        <section className="cyber-card text-center py-10">
+          <p className="text-cyber-text font-medium mb-2">Section not available for your WDC role</p>
+          <p className="text-sm text-cyber-muted mb-4">
+            {positionLabel} accounts do not access this dashboard tab. Use the menu items for your office.
+          </p>
+          <Link to="/dashboard/wdc" className="cyber-btn-primary text-sm">Back to Overview</Link>
+        </section>
+      );
+    }
+
     switch (activeTab) {
       case 'requests':
         return renderRequests();
@@ -548,34 +617,16 @@ export default function WDCDashboard() {
             Community Connect Hub
           </p>
           <h1 className="text-xl sm:text-2xl font-bold text-text-primary mt-1">
-            Welcome, WDC – Ward {wardNumber}
+            {roleDashboard.title}
           </h1>
           <p className="text-sm text-text-secondary mt-1">
-            Ward {wardNumber}, {llg}
+            {positionLabel} · Ward {wardNumber}, {llg}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <DataSourceIndicator source={dataSource} />
         </div>
       </header>
-
-      <nav className="flex flex-wrap gap-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-primary/10 text-primary border border-primary/30'
-                : 'text-text-secondary border border-border hover:text-text-primary'
-            }`}
-          >
-            <i className={`fas ${tab.icon}`} aria-hidden="true" />
-            {tab.label}
-          </button>
-        ))}
-      </nav>
 
       {error && (
         <div className="p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">

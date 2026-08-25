@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { resolveDashboardPath } from '../../constants';
@@ -10,11 +10,16 @@ export default function LoginPage() {
   const location = useLocation();
   const successMessage = location.state?.message ?? '';
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+  const [emailForLink, setEmailForLink] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  function syncEmailFromInput() {
+    setEmailForLink(emailRef.current?.value?.trim() ?? '');
+  }
 
   if (isAuthenticated) {
     navigate(dashboardPath, { replace: true });
@@ -25,6 +30,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    const email = emailRef.current?.value?.trim() ?? '';
+    const password = passwordRef.current?.value ?? '';
 
     try {
       const userData = await login(email, password);
@@ -65,25 +73,35 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4" autoComplete="on">
           <div>
-            <label className="block text-sm text-cyber-muted mb-1">Email</label>
+            <label className="block text-sm text-cyber-muted mb-1" htmlFor="login-email">
+              Email
+            </label>
             <input
+              ref={emailRef}
+              id="login-email"
+              name="username"
               type="email"
               className="cyber-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="lisanumbunda@gmail.com"
+              placeholder="Enter your email address"
+              autoComplete="username email"
+              onInput={syncEmailFromInput}
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-cyber-muted mb-1">Password</label>
+            <label className="block text-sm text-cyber-muted mb-1" htmlFor="login-password">
+              Password
+            </label>
             <input
+              ref={passwordRef}
+              id="login-password"
+              name="password"
               type="password"
               className="cyber-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              autoComplete="current-password"
               required
             />
           </div>
@@ -99,7 +117,7 @@ export default function LoginPage() {
             </label>
             <Link
               to="/login/forgot-password"
-              state={{ email }}
+              state={{ email: emailForLink }}
               className="text-cyber-accent hover:underline"
             >
               Forgot Password?

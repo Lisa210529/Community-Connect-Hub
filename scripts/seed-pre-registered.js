@@ -57,9 +57,9 @@ const OFFICIALS = [
     llg: 'Madang Urban',
   },
   {
-    id: 'pre-peter-kama',
-    fullName: 'Peter Kama',
-    email: 'peter.kama@example.com',
+    id: 'pre-joddy-numbunda',
+    fullName: 'Joddy Numbunda',
+    email: 'JoddyNumbunda@gmail.com',
     nid: '2583691474',
     role: 'mayor',
     position: 'Mayor of Madang',

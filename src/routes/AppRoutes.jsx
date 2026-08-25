@@ -126,7 +126,9 @@ export default function AppRoutes() {
             }
           />
           <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/documents" element={<DocumentGeneratorPage />} />
+          <Route element={<ProtectedRoute allowedRoles={['wdc-member']} />}>
+            <Route path="/documents" element={<DocumentGeneratorPage />} />
+          </Route>
         </Route>
       </Route>
 

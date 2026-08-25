@@ -15,6 +15,15 @@
   .cyber-input {
     @apply w-full bg-background border border-border rounded-lg px-4 py-2.5 text-text-primary placeholder-text-secondary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary;
   }
+  .cyber-input:-webkit-autofill,
+  .cyber-input:-webkit-autofill:hover,
+  .cyber-input:-webkit-autofill:focus,
+  .cyber-input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #020617 inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    caret-color: #f8fafc;
+    transition: background-color 5000s ease-in-out 0s;
+  }
   .cyber-select {
     @apply cyber-input appearance-none cursor-pointer;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23F8FAFC'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");

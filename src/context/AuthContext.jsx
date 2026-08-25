@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { resolveDashboardPath } from '../constants';
 import { validateNID } from '../utils/validators';
 import { isValidEmail } from '../utils/helpers';
@@ -11,10 +11,9 @@ import {
   preRegisterOfficial,
   subscribeToAuthChanges,
   getUserData,
-  getCurrentUser,
   updateUserProfile,
 } from '../services/authService';
-
+import { auth } from '../services/firebase';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -28,10 +27,23 @@ export function AuthProvider({ children }) {
 
     async function loadUser() {
       try {
-        const userData = await getCurrentUser();
-        if (active) {
-          setUser(userData);
-          setFirebaseUser(userData);
+        const fbUser = auth.currentUser;
+        if (!fbUser) {
+          if (active) {
+            setUser(null);
+            setFirebaseUser(null);
+          }
+          return;
+        }
+        const profile = await getUserData(fbUser.uid);
+        if (profile?.isApproved && profile?.isActive) {
+          if (active) {
+            setUser(profile);
+            setFirebaseUser(fbUser);
+          }
+        } else if (active) {
+          setUser(null);
+          setFirebaseUser(null);
         }
       } catch {
         if (active) {
@@ -76,9 +88,9 @@ export function AuthProvider({ children }) {
     const email = identifier.trim();
     if (!isValidEmail(email)) throw new Error('Please enter a valid email address.');
     if (!password?.trim()) throw new Error('Please enter a password.');
-    const { profile } = await loginUser(email, password);
+    const { profile, firebaseUser: fbUser } = await loginUser(email, password);
     setUser(profile);
-    setFirebaseUser({ uid: profile.uid, email: profile.email });
+    setFirebaseUser(fbUser);
     setMfaVerified(!profile.mfaEnabled);
     return profile;
   }, []);
@@ -136,12 +148,29 @@ export function AuthProvider({ children }) {
   }, []);
 
   const updateProfile = useCallback(
-    async (updates) => {
+    async (updates, options = {}) => {
       if (!user?.uid) return;
-      const updated = await updateUserProfile(user.uid, updates);
+      const updated = await updateUserProfile(user.uid, updates, options);
       setUser(updated);
+      if (auth.currentUser) {
+        setFirebaseUser(auth.currentUser);
+      }
+      return updated;
     },
     [user],
+  );
+
+  const signInEmail = firebaseUser?.email ?? '';
+  const profileEmail = user?.email ?? '';
+  const emailSyncRequired = useMemo(
+    () =>
+      Boolean(
+        user &&
+          signInEmail &&
+          profileEmail &&
+          signInEmail.trim().toLowerCase() !== profileEmail.trim().toLowerCase(),
+      ),
+    [user, signInEmail, profileEmail],
   );
 
   const dashboardPath = resolveDashboardPath(user);
@@ -151,6 +180,8 @@ export function AuthProvider({ children }) {
       value={{
         user,
         firebaseUser,
+        signInEmail,
+        emailSyncRequired,
         role: user?.role,
         loading,
         isAuthenticated: !!user && (!user?.mfaEnabled || mfaVerified),

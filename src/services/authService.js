@@ -5,6 +5,9 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
   deleteUser,
+  updateEmail,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
 } from 'firebase/auth';
 import {
   collection,
@@ -22,6 +25,7 @@ import {
 import { auth, db } from './firebase';
 import { normalizeRole } from '../constants/roleMapping';
 import { getNidFromData, getRoleFromData, mapAuthErrorCode } from '../utils/authHelpers';
+import { isValidEmail } from '../utils/helpers';
 
 export { getNidFromData, getRoleFromData } from '../utils/authHelpers';
 
@@ -204,12 +208,14 @@ async function rollbackOfficialRegistration(authUser, createdAuth) {
   }
 }
 
-export async function checkEmailExists(email) {
+export async function checkEmailExists(email, excludeUid = null) {
   const normalizedEmail = email.trim().toLowerCase();
   const snapshot = await getDocs(
     query(collection(db, 'users'), where('email', '==', normalizedEmail), limit(1)),
   );
-  return !snapshot.empty;
+  if (snapshot.empty) return false;
+  if (excludeUid && snapshot.docs[0].id === excludeUid) return false;
+  return true;
 }
 
 export async function checkNidInPreRegistered(nid) {
@@ -285,6 +291,10 @@ export async function registerUser(userData) {
   const normalizedNid = String(userData.nid ?? '').replace(/\s/g, '');
   const normalizedEmail = userData.email.trim().toLowerCase();
   const role = userData.role || 'resident';
+
+  if (role === 'resident' && !userData.acceptedTerms) {
+    throw new Error('You must accept the Terms & Conditions before you can register.');
+  }
 
   if (!/^\d{10}$/.test(normalizedNid)) {
     throw new Error('NID must be exactly 10 digits');
@@ -464,12 +474,55 @@ export async function normalizeAllUserRoles() {
   return updates.length;
 }
 
-export async function updateUserData(uid, data) {
+export async function updateUserData(uid, data, options = {}) {
+  const authUser = auth.currentUser;
+  if (!authUser || authUser.uid !== uid) {
+    throw new Error('You must be signed in to update your profile.');
+  }
+
   const payload = { ...data, updatedAt: serverTimestamp() };
   if (data.firstName || data.lastName) {
     payload.fullName = `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim();
   }
-  await updateDoc(doc(db, 'users', uid), payload);
+
+  const profileEmail = (data.email ?? authUser.email ?? '').trim().toLowerCase();
+  const authEmail = (authUser.email ?? '').trim().toLowerCase();
+
+  if (profileEmail) {
+    if (!isValidEmail(profileEmail)) {
+      throw new Error('Please enter a valid email address.');
+    }
+    payload.email = profileEmail;
+
+    if (profileEmail !== authEmail) {
+      if (await checkEmailExists(profileEmail, uid)) {
+        throw new Error('This email is already registered to another account.');
+      }
+
+      const loginEmail = authEmail || profileEmail;
+      const { currentPassword } = options;
+      if (!currentPassword?.trim()) {
+        throw new Error('Enter your current password to change your sign-in email.');
+      }
+
+      const credential = EmailAuthProvider.credential(loginEmail, currentPassword);
+      try {
+        await reauthenticateWithCredential(authUser, credential);
+        await updateEmail(authUser, profileEmail);
+      } catch (error) {
+        if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+          throw new Error('Current password is incorrect.');
+        }
+        if (error.code === 'auth/email-already-in-use') {
+          throw new Error('This email is already registered to another account.');
+        }
+        if (error.code?.startsWith('auth/')) throw mapAuthError(error);
+        throw error;
+      }
+    }
+  }
+
+  await updateDoc(doc(db, 'users', uid), sanitizeFirestoreData(payload));
   return getUserData(uid);
 }
 

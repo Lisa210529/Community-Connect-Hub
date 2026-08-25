@@ -81,8 +81,13 @@ export default function RequestsPage() {
         content: letter.content,
         fileName: buildLetterPdfFileName(letter),
         ward: request?.ward || user?.ward,
+        councillorName: letter.councillorName || letter.signedByName,
         residentName: letter.residentName || user?.name,
         letterType: letter.letterType || request?.category,
+        signatureImageDataUrl: letter.signatureDataUrl || '',
+        signedByName: letter.signedByName || letter.councillorName,
+        signedAt: letter.signedAt || letter.sentAt,
+        roleTitle: `Ward Councillor – ${request?.ward || user?.ward || ''}`.trim(),
       });
     } catch (err) {
       setError(err.message || 'Failed to download letter PDF.');
@@ -206,7 +211,9 @@ export default function RequestsPage() {
                   </p>
                   {letterReady && linkedLetter?.content && (
                     <p className="text-xs text-status-completed mt-2">
-                      Letter ready from your Ward Councillor.
+                      {linkedLetter.signatureDataUrl
+                        ? 'Signed letter ready from your Ward Councillor.'
+                        : 'Letter ready from your Ward Councillor.'}
                     </p>
                   )}
                 </div>

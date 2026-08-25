@@ -7,6 +7,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
 import Modal from '../../components/ui/Modal';
 import ProposalFormModal from '../../components/Councillor/ProposalFormModal';
+import SignaturePad from '../../components/forms/SignaturePad';
 import { firestoreService, loadHybridCollection } from '../../services/firestoreService';
 import {
   getWardNumber,
@@ -17,15 +18,6 @@ import {
 } from '../../utils/wdcHelpers';
 import { computeScorecard } from '../../utils/scorecardHelpers';
 import { notifyResidentsOfAnnouncement } from '../../utils/announcementNotifications';
-
-const TABS = [
-  { id: 'overview', label: 'Overview', icon: 'fa-th-large' },
-  { id: 'projects', label: 'Projects', icon: 'fa-folder-open' },
-  { id: 'requests', label: 'Requests', icon: 'fa-inbox' },
-  { id: 'announcements', label: 'Announcements', icon: 'fa-bullhorn' },
-  { id: 'letters', label: 'Letters', icon: 'fa-file-alt' },
-  { id: 'profile', label: 'Profile', icon: 'fa-user' },
-];
 
 const SCORECARD_CATEGORIES = [
   { key: 'engagement', label: 'Community Engagement', icon: 'fa-users' },
@@ -119,6 +111,7 @@ export default function CouncillorDashboard() {
   const [letterModal, setLetterModal] = useState(false);
   const [letterRequest, setLetterRequest] = useState(null);
   const [letterForm, setLetterForm] = useState(EMPTY_LETTER);
+  const [letterSignatureDataUrl, setLetterSignatureDataUrl] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const forwardedNeeds = useMemo(
@@ -186,11 +179,6 @@ export default function CouncillorDashboard() {
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
-
-  function setTab(tabId) {
-    if (tabId === 'overview') navigate('/dashboard/councillor');
-    else navigate(`/dashboard/councillor/${tabId}`);
-  }
 
   async function openReview(need) {
     setReviewNeed(need);
@@ -315,32 +303,56 @@ export default function CouncillorDashboard() {
   }
 
   function openLetterForm(req) {
+    const councillorName = user?.name ?? user?.fullName ?? 'Ward Councillor';
     setLetterRequest(req);
     setLetterForm({
-      content: `Dear Sir/Madam,\n\nRe: ${req.category} for ${req.residentName}\n\n${req.description}\n\nYours faithfully,\n${user?.name}\nWard Councillor – ${ward}`,
+      content: `Re: ${req.category} for ${req.residentName}\n\nDear Sir/Madam,\n\nI write to confirm that ${req.residentName} is a resident of ${ward} and respectfully submit this ${String(req.category ?? 'letter').toLowerCase()} for your consideration.\n\n${req.description}\n\nYours faithfully,`,
       attachments: '',
     });
+    setLetterSignatureDataUrl(null);
     setLetterModal(true);
+  }
+
+  function closeLetterModal() {
+    setLetterModal(false);
+    setLetterRequest(null);
+    setLetterForm(EMPTY_LETTER);
+    setLetterSignatureDataUrl(null);
   }
 
   async function handleCreateLetter(e) {
     e.preventDefault();
     if (!letterRequest) return;
+    if (!letterSignatureDataUrl) {
+      setError('Please sign the letter before sending it to the resident.');
+      return;
+    }
+
     setSaving(true);
     setError('');
+    const signedAt = new Date().toISOString();
+    const councillorName = user?.name ?? user?.fullName ?? 'Ward Councillor';
+
     try {
       await firestoreService.createLetter({
         residentId: letterRequest.residentId,
         residentName: letterRequest.residentName,
         requestId: letterRequest.id,
         letterType: letterRequest.letterType || 'reference',
+        category: letterRequest.category,
         content: letterForm.content,
         attachments: letterForm.attachments ? [letterForm.attachments] : [],
         status: 'completed',
         councillorId: user?.uid ?? user?.id,
+        councillorName,
+        ward,
         wardId,
-        createdAt: new Date().toISOString(),
-        sentAt: new Date().toISOString(),
+        signedBy: user?.uid ?? user?.id,
+        signedByName: councillorName,
+        signedAt,
+        signatureDataUrl: letterSignatureDataUrl,
+        createdAt: signedAt,
+        sentAt: signedAt,
       });
 
       await firestoreService.updateRequest(letterRequest.id, { status: 'completed' });
@@ -350,15 +362,13 @@ export default function CouncillorDashboard() {
           userId: letterRequest.residentId,
           type: 'letter_ready',
           title: 'Your letter is ready',
-          message: `Your ${letterRequest.category} has been prepared by the Ward Councillor.`,
+          message: `Your signed ${letterRequest.category} has been prepared by the Ward Councillor.`,
           wardId,
         });
       }
 
-      setSuccessMessage('Letter created and resident notified.');
-      setLetterModal(false);
-      setLetterRequest(null);
-      setLetterForm(EMPTY_LETTER);
+      setSuccessMessage('Signed letter created and resident notified.');
+      closeLetterModal();
       await loadDashboardData();
     } catch (err) {
       setError(err.message || 'Failed to create letter.');
@@ -607,6 +617,11 @@ export default function CouncillorDashboard() {
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-medium">{letter.residentName}</h4>
                     <StatusBadge status={letter.status} />
+                    {letter.signatureDataUrl && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        Signed
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-cyber-muted capitalize">
                     {String(letter.letterType ?? 'letter').replace(/_/g, ' ')} · {formatDate(letter.createdAt)}
@@ -659,24 +674,6 @@ export default function CouncillorDashboard() {
           <DataSourceIndicator source={dataSource} />
         </div>
       </header>
-
-      <nav className="flex flex-wrap gap-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-cyber-accent/10 text-cyber-accent border border-cyber-accent/30'
-                : 'text-cyber-muted border border-slate-border hover:text-cyber-text'
-            }`}
-          >
-            <i className={`fas ${tab.icon}`} aria-hidden="true" />
-            {tab.label}
-          </button>
-        ))}
-      </nav>
 
       {error && (
         <div className="p-3 rounded-lg bg-status-rejected/10 border border-status-rejected/30 text-status-rejected text-sm">
@@ -838,7 +835,7 @@ export default function CouncillorDashboard() {
         </form>
       </Modal>
 
-      <Modal open={letterModal} onClose={() => setLetterModal(false)} title="Create Letter" wide>
+      <Modal open={letterModal} onClose={closeLetterModal} title="Create Letter" wide>
         {letterRequest && (
           <form onSubmit={handleCreateLetter} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -858,7 +855,7 @@ export default function CouncillorDashboard() {
             <div>
               <label className="text-xs text-cyber-muted">Letter Content</label>
               <textarea
-                className="cyber-input min-h-[200px] font-mono text-sm"
+                className="cyber-input min-h-[180px] font-mono text-sm"
                 value={letterForm.content}
                 onChange={(e) => setLetterForm({ ...letterForm, content: e.target.value })}
                 required
@@ -873,8 +870,23 @@ export default function CouncillorDashboard() {
                 placeholder="File name or URL"
               />
             </div>
-            <button type="submit" disabled={saving} className="cyber-btn-primary w-full">
-              {saving ? 'Saving…' : 'Create & Notify Resident'}
+            <div className="pt-2 border-t border-slate-border">
+              <p className="text-sm font-medium text-cyber-text mb-2">Ward Councillor signature</p>
+              <p className="text-xs text-cyber-muted mb-3">
+                Sign before sending — your signature will appear on the official letter PDF.
+              </p>
+              <SignaturePad
+                key={letterRequest.id}
+                signerName={user?.name ?? user?.fullName ?? 'Ward Councillor'}
+                onSignatureChange={setLetterSignatureDataUrl}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={saving || !letterSignatureDataUrl}
+              className="cyber-btn-primary w-full disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Sign & Notify Resident'}
             </button>
           </form>
         )}

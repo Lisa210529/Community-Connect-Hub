@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import EmailSyncBanner from '../ui/EmailSyncBanner';
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -12,6 +13,7 @@ export default function DashboardLayout() {
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-auto p-4 lg:p-8 max-w-7xl mx-auto w-full">
+          <EmailSyncBanner />
           <Outlet />
         </main>
       </div>
