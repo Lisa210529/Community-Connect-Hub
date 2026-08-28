@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { auth } from '../../services/firebase';
 import { validatePassword } from '../../utils/validation';
 import { buildOtpAuthUrl, generateMfaSecret, verifyTotpCode, generateSmsCode } from '../../utils/mfaHelpers';
 import { getStore, setCollection } from '../../services/localStorageService';
+import ProfileAvatar from '../../components/common/ProfileAvatar';
+import { uploadProfilePhoto, PROFILE_PHOTO_MAX_BYTES } from '../../services/storageService';
+import { readFileAsDataUrl } from '../../utils/fileHelpers';
 
 export default function ProfilePage() {
   const { user, updateProfile, signInEmail, emailSyncRequired } = useAuth();
+  const photoInputRef = useRef(null);
+  const [photoPreview, setPhotoPreview] = useState(user?.photoURL ?? '');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [form, setForm] = useState({
     firstName: user?.firstName ?? '',
     lastName: user?.lastName ?? '',
@@ -28,6 +34,66 @@ export default function ProfilePage() {
   const authSignInEmail = signInEmail || auth.currentUser?.email || '';
   const emailChanged =
     form.email.trim().toLowerCase() !== authSignInEmail.trim().toLowerCase();
+
+  async function handlePhotoSelect(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setMessage('');
+    setError('');
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose a JPG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > PROFILE_PHOTO_MAX_BYTES) {
+      setError('Profile photo must be 2 MB or smaller.');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const preview = await readFileAsDataUrl(file);
+      setPhotoPreview(preview);
+
+      let photoURL = preview;
+      try {
+        photoURL = await uploadProfilePhoto(user.uid, file);
+      } catch (uploadErr) {
+        console.warn('Storage upload failed, saving photo to profile directly:', uploadErr);
+        if (file.size > 500 * 1024) {
+          throw new Error(
+            'Could not upload to cloud storage. Choose a smaller image (under 500 KB) or ask an admin to deploy storage rules.',
+          );
+        }
+      }
+
+      await updateProfile({ photoURL });
+      setPhotoPreview(photoURL);
+      setMessage('Profile photo updated.');
+    } catch (err) {
+      setPhotoPreview(user?.photoURL ?? '');
+      setError(err.message || 'Could not update profile photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setUploadingPhoto(true);
+    setMessage('');
+    setError('');
+    try {
+      await updateProfile({ photoURL: '' });
+      setPhotoPreview('');
+      setMessage('Profile photo removed.');
+    } catch (err) {
+      setError(err.message || 'Could not remove profile photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   async function saveProfile(e) {
     e.preventDefault();
@@ -141,6 +207,45 @@ export default function ProfilePage() {
       <div className="cyber-card mb-6">
         <h2 className="font-semibold mb-4">Edit Profile</h2>
         <form onSubmit={saveProfile} className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 pb-4 border-b border-border">
+            <ProfileAvatar
+              user={{ ...user, photoURL: photoPreview || user?.photoURL }}
+              size="lg"
+            />
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-text-primary">Profile Photo</p>
+              <p className="text-xs text-cyber-muted">
+                Upload a photo to show in the header when you are signed in. JPG, PNG, or WebP — max 2 MB.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="cyber-btn-secondary text-sm"
+                  disabled={uploadingPhoto}
+                  onClick={() => photoInputRef.current?.click()}
+                >
+                  {uploadingPhoto ? 'Uploading…' : photoPreview ? 'Change Photo' : 'Upload Photo'}
+                </button>
+                {photoPreview && (
+                  <button
+                    type="button"
+                    className="cyber-btn-danger text-sm"
+                    disabled={uploadingPhoto}
+                    onClick={handleRemovePhoto}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={handlePhotoSelect}
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-cyber-muted">First Name</label>

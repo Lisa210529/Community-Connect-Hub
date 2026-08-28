@@ -70,6 +70,7 @@ export function normalizeProfile(uid, data) {
     district: data.district ?? '',
     llg: data.llg ?? '',
     position: data.position ?? '',
+    photoURL: data.photoURL ?? data.profilePhotoUrl ?? '',
     isApproved: Boolean(data.isApproved),
     isRegistered: data.isRegistered !== false,
     isActive: data.isActive !== false,

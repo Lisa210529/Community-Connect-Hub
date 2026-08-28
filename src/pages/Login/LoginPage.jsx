@@ -1,8 +1,23 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { resolveDashboardPath } from '../../constants';
 import Logo from '../../components/common/Logo';
+
+function unlockInput(e, setFieldsActive) {
+  const input = e.currentTarget;
+  if (input.readOnly) {
+    if (e.type === 'mousedown') {
+      e.preventDefault();
+    }
+    input.readOnly = false;
+    input.removeAttribute('readonly');
+    if (e.type === 'mousedown') {
+      input.focus();
+    }
+  }
+  setFieldsActive(true);
+}
 
 export default function LoginPage() {
   const { login, dashboardPath, isAuthenticated } = useAuth();
@@ -12,10 +27,28 @@ export default function LoginPage() {
 
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
+  const [fieldsActive, setFieldsActive] = useState(false);
   const [emailForLink, setEmailForLink] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Keep fields blank on load; Chrome may autofill after paint while readOnly is set.
+  useEffect(() => {
+    function clearLockedFields() {
+      if (fieldsActive) return;
+      if (emailRef.current?.readOnly) emailRef.current.value = '';
+      if (passwordRef.current?.readOnly) passwordRef.current.value = '';
+    }
+
+    clearLockedFields();
+    const timer = window.setTimeout(clearLockedFields, 100);
+    return () => window.clearTimeout(timer);
+  }, [fieldsActive]);
+
+  function handleInputReady(e) {
+    unlockInput(e, setFieldsActive);
+  }
 
   function syncEmailFromInput() {
     setEmailForLink(emailRef.current?.value?.trim() ?? '');
@@ -86,6 +119,10 @@ export default function LoginPage() {
               className="cyber-input"
               placeholder="Enter your email address"
               autoComplete="username email"
+              defaultValue=""
+              readOnly={!fieldsActive}
+              onMouseDown={handleInputReady}
+              onFocus={handleInputReady}
               onInput={syncEmailFromInput}
               required
             />
@@ -102,6 +139,10 @@ export default function LoginPage() {
               className="cyber-input"
               placeholder="Enter your password"
               autoComplete="current-password"
+              defaultValue=""
+              readOnly={!fieldsActive}
+              onMouseDown={handleInputReady}
+              onFocus={handleInputReady}
               required
             />
           </div>

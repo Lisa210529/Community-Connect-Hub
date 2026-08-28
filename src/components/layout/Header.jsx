@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import NotificationBell from '../ui/NotificationBell';
+import ProfileAvatar from '../common/ProfileAvatar';
 
 export default function Header({ onMenuClick, title }) {
   const { user, logout } = useAuth();
@@ -24,11 +25,12 @@ export default function Header({ onMenuClick, title }) {
         </button>
         {title && <h1 className="text-lg font-semibold text-text-primary truncate">{title}</h1>}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         <div className="text-right hidden sm:block">
           <p className="text-base font-medium text-text-primary">{user?.name}</p>
           <p className="text-sm text-text-secondary">{user?.email}</p>
         </div>
+        <ProfileAvatar user={user} size="md" linkToProfile />
         <NotificationBell />
         <button
           type="button"
