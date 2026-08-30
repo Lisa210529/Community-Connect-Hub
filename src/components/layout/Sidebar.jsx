@@ -1,8 +1,8 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { getNavForRole, ROLES } from '../../constants';
-import { normalizeRole, isCouncillorUser } from '../../constants/roleMapping';
-import { getWdcRoleDashboard } from '../../constants/wdcRoles';
+import { getNavForRole } from '../../constants';
+import { normalizeRole } from '../../constants/roleMapping';
+import Logo from '../common/Logo';
 
 function isNavItemActive(path, location) {
   if (path === '/dashboard/councillor') {
@@ -37,9 +37,6 @@ export default function Sidebar({ open, onClose }) {
   const location = useLocation();
   const userRole = normalizeRole(user?.role);
   const navItems = getNavForRole(user?.role, user?.rawRole, user);
-  const roleLabel = ROLES[user?.rawRole ?? userRole] ?? ROLES[userRole] ?? userRole;
-  const isWdcMember = userRole === 'wdc-member' || normalizeRole(user?.rawRole) === 'wdc-member';
-  const wdcDashboard = isWdcMember ? getWdcRoleDashboard(user) : null;
 
   if (import.meta.env.DEV) {
     console.debug('[Sidebar] role:', user?.role, 'normalized:', userRole, 'nav:', navItems.map((n) => n.label));
@@ -69,20 +66,13 @@ export default function Sidebar({ open, onClose }) {
           open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <div className="p-5 border-b border-border flex items-center justify-between">
-          <div>
-            <p className="text-lg font-bold text-text-primary">
-              Community <span className="text-primary">Connect Hub</span>
-            </p>
-            <p className="text-sm text-text-secondary mt-1 capitalize">{roleLabel}</p>
-            {isCouncillorUser(user) && (
-              <p className="text-sm text-primary/80 mt-1">Councillor workspace</p>
-            )}
-            {wdcDashboard && (
-              <p className="text-sm text-primary/80 mt-1">{wdcDashboard.workspaceLabel}</p>
-            )}
-          </div>
-          <button type="button" className="lg:hidden text-text-secondary" onClick={onClose}>
+        <div className="relative p-4 border-b border-border flex items-center justify-center">
+          <Logo size="sidebar" className="w-auto" />
+          <button
+            type="button"
+            className="absolute right-3 top-3 lg:hidden text-text-secondary"
+            onClick={onClose}
+          >
             <i className="fas fa-times text-lg" aria-hidden="true" />
           </button>
         </div>

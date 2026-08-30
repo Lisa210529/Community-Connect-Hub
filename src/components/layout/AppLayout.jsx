@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants';
 import { hasAnyRole } from '../../constants/roleMapping';
 import { getInitials } from '../../utils/validation';
+import Logo from '../common/Logo';
 
 const NAV_ITEMS = [
   { to: '/resident', label: 'Resident', icon: 'fa-home', roles: ['resident'] },
@@ -43,11 +44,8 @@ export default function AppLayout() {
   return (
     <div className="app-wrapper active">
       <aside className="sidebar">
-        <div className="sidebar-brand">
-          <h4>
-            <i className="fas fa-hub me-2" />
-            Connect Hub
-          </h4>
+        <div className="sidebar-brand flex justify-center py-3">
+          <Logo size="sidebar" className="w-auto" />
         </div>
 
         <nav className="sidebar-nav">

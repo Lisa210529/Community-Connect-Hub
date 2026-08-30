@@ -18,6 +18,8 @@ import {
 } from '../../utils/wdcHelpers';
 import { computeScorecard } from '../../utils/scorecardHelpers';
 import { notifyResidentsOfAnnouncement } from '../../utils/announcementNotifications';
+import { buildLetterContent } from '../../utils/letterTemplates';
+import { getUserData } from '../../services/authService';
 
 const SCORECARD_CATEGORIES = [
   { key: 'engagement', label: 'Community Engagement', icon: 'fa-users' },
@@ -302,15 +304,54 @@ export default function CouncillorDashboard() {
     }
   }
 
-  function openLetterForm(req) {
+  async function openLetterForm(req) {
     const councillorName = user?.name ?? user?.fullName ?? 'Ward Councillor';
-    setLetterRequest(req);
+    let residentNid = req.residentNid ?? '';
+
+    if (!residentNid && req.residentId) {
+      try {
+        const profile = await getUserData(req.residentId);
+        residentNid = profile?.nid ?? profile?.pid ?? '';
+      } catch {
+        // Letter can still be drafted without NID
+      }
+    }
+
+    setLetterRequest({ ...req, residentNid });
     setLetterForm({
-      content: `Re: ${req.category} for ${req.residentName}\n\nDear Sir/Madam,\n\nI write to confirm that ${req.residentName} is a resident of ${ward} and respectfully submit this ${String(req.category ?? 'letter').toLowerCase()} for your consideration.\n\n${req.description}\n\nYours faithfully,`,
+      content: buildLetterContent({
+        letterType: req.letterType || 'reference',
+        category: req.category,
+        residentName: req.residentName,
+        ward,
+        wardNumber,
+        councillorName,
+        purpose: req.description,
+        zone: req.zone ?? req.area,
+      }),
       attachments: '',
     });
     setLetterSignatureDataUrl(null);
     setLetterModal(true);
+  }
+
+  function resetLetterTemplate() {
+    if (!letterRequest) return;
+    const councillorName = user?.name ?? user?.fullName ?? 'Ward Councillor';
+    setLetterForm((prev) => ({
+      ...prev,
+      content: buildLetterContent({
+        letterType: letterRequest.letterType || 'reference',
+        category: letterRequest.category,
+        residentName: letterRequest.residentName,
+        ward,
+        wardNumber,
+        councillorName,
+        purpose: letterRequest.description,
+        zone: letterRequest.zone ?? letterRequest.area,
+      }),
+    }));
+    setLetterSignatureDataUrl(null);
   }
 
   function closeLetterModal() {
@@ -853,9 +894,18 @@ export default function CouncillorDashboard() {
               </div>
             </div>
             <div>
-              <label className="text-xs text-cyber-muted">Letter Content</label>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="text-xs text-cyber-muted">Letter Content</label>
+                <button
+                  type="button"
+                  onClick={resetLetterTemplate}
+                  className="text-xs text-cyber-accent hover:underline"
+                >
+                  Reset to template
+                </button>
+              </div>
               <textarea
-                className="cyber-input min-h-[180px] font-mono text-sm"
+                className="cyber-input min-h-[280px] font-mono text-sm leading-relaxed"
                 value={letterForm.content}
                 onChange={(e) => setLetterForm({ ...letterForm, content: e.target.value })}
                 required
