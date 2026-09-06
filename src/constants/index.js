@@ -175,6 +175,7 @@ export const NAV_ITEMS = {
   dda: [
     { path: '/dashboard/dda', label: 'Overview', icon: 'fa-home' },
     { path: '/dashboard/dda/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/dda/acquittals', label: 'Acquittals', icon: 'fa-file-invoice-dollar' },
     { path: '/dashboard/dda/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
     { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
@@ -182,6 +183,7 @@ export const NAV_ITEMS = {
   psip: [
     { path: '/dashboard/psip', label: 'Overview', icon: 'fa-home' },
     { path: '/dashboard/psip/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/psip/acquittals', label: 'Acquittals', icon: 'fa-file-invoice-dollar' },
     { path: '/dashboard/psip/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
     { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
@@ -189,6 +191,7 @@ export const NAV_ITEMS = {
   dsip: [
     { path: '/dashboard/dsip', label: 'Overview', icon: 'fa-home' },
     { path: '/dashboard/dsip/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/dsip/acquittals', label: 'Acquittals', icon: 'fa-file-invoice-dollar' },
     { path: '/dashboard/dsip/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
     { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
@@ -196,6 +199,7 @@ export const NAV_ITEMS = {
   ngo: [
     { path: '/dashboard/ngo', label: 'Overview', icon: 'fa-home' },
     { path: '/dashboard/ngo/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/ngo/acquittals', label: 'Acquittals', icon: 'fa-file-invoice-dollar' },
     { path: '/dashboard/ngo/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
     { path: '/announcements', label: 'Announcements', icon: 'fa-bullhorn' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },
@@ -203,6 +207,7 @@ export const NAV_ITEMS = {
   'open-member': [
     { path: '/dashboard/open-member', label: 'Overview', icon: 'fa-home' },
     { path: '/dashboard/open-member/funding-requests', label: 'Funding Requests', icon: 'fa-hand-holding-usd' },
+    { path: '/dashboard/open-member/acquittals', label: 'Acquittals', icon: 'fa-file-invoice-dollar' },
     { path: '/dashboard/open-member/approved', label: 'Approved Projects', icon: 'fa-check-circle' },
     { path: '/reports', label: 'Reports', icon: 'fa-chart-bar' },
     { path: '/profile', label: 'Profile', icon: 'fa-user' },

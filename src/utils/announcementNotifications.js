@@ -47,6 +47,13 @@ export function getNotificationRoute(notification) {
   }
   if (notification?.type === 'letter_ready') return '/requests';
   if (notification?.type === 'project_rating') return '/projects';
+  if (notification?.type === 'acquittal_received' || notification?.type === 'acquittal_update') {
+    const source = String(notification?.fundingSource ?? '').toLowerCase();
+    const routes = { dda: '/dashboard/dda/acquittals', psip: '/dashboard/psip/acquittals', dsip: '/dashboard/dsip/acquittals', ngo: '/dashboard/ngo/acquittals' };
+    if (routes[source]) return routes[source];
+    return '/acquittals';
+  }
+  if (notification?.type === 'acquittal_submitted') return '/acquittals';
   return '/announcements';
 }
 

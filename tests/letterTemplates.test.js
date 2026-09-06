@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildCharacterReferenceLetter,
+  buildAcquittalReport,
   buildLetterContent,
   buildStatutoryDeclarationLetter,
   buildSupportLetter,
@@ -89,5 +90,30 @@ describe('letterTemplates', () => {
 
     expect(content).toContain('Letter of Support for JANE DOE');
     expect(content).toContain('School enrolment');
+  });
+
+  it('builds WDC acquittal report for funding stakeholder submission', () => {
+    const content = buildAcquittalReport({
+      projectName: 'Street Light Project - Zone A',
+      ward: 'Ward 5',
+      wardNumber: '5',
+      fundingSource: 'DDA',
+      amountAllocated: 10000,
+      amountSpent: 8000,
+      balance: 2000,
+      contractorName: 'ABC Contractors',
+      preparerName: 'Ezekiel Numbunda',
+      expenditureBreakdown: [{ category: 'Materials', amount: 5000, description: 'Poles and fittings' }],
+      date: '2026-09-07',
+    });
+
+    expect(content).toContain('WARD DEVELOPMENT COMMITTEE — ACQUITTAL REPORT');
+    expect(content).toContain('Submitted to: DDA (Funding Stakeholder)');
+    expect(content).toContain('Street Light Project - Zone A');
+    expect(content).toContain('K 10,000');
+    expect(content).toContain('K 8,000');
+    expect(content).toContain('Materials');
+    expect(content).toContain('Ezekiel Numbunda');
+    expect(content).toContain('Signature:');
   });
 });

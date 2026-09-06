@@ -1,4 +1,4 @@
-import logoImage from '../../assets/images/cch-logo.png';
+import logoImage from '../../assets/images/cch-logo.jpg';
 
 const SIZE_CLASSES = {
   sm: 'h-14 w-14',

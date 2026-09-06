@@ -8,15 +8,16 @@ import Modal from '../../components/ui/Modal';
 import DataSourceIndicator from '../../components/ui/DataSourceIndicator';
 import { ROLES, ROLE_DASHBOARD_PATHS } from '../../constants';
 import { getStakeholderType, getStakeholderLabel } from '../../constants/funding';
+import { getFundingSourceLabel } from '../../constants/acquittals';
 import { RATING_CATEGORIES } from '../../constants/ratings';
 import { formatWardForDisplay } from '../../constants/wards';
 import Rating from '../../components/common/Rating';
 import { normalizeRole } from '../../constants/roleMapping';
 import { firestoreService } from '../../services/firestoreService';
-import { downloadBase64File } from '../../utils/fileHelpers';
+import { downloadBase64File, downloadDocumentAsPdf } from '../../utils/fileHelpers';
 import { completeApprovedFunding } from '../../utils/fundingRepair';
 
-const STAKEHOLDER_TAB_IDS = ['overview', 'funding-requests', 'approved', 'profile'];
+const STAKEHOLDER_TAB_IDS = ['overview', 'funding-requests', 'acquittals', 'approved', 'profile'];
 
 const EMPTY_APPROVE_FORM = {
   amountApproved: '',
@@ -65,6 +66,10 @@ export default function StakeholderDashboard() {
   const [resendingId, setResendingId] = useState(null);
   const [ratings, setRatings] = useState([]);
   const [ratingsLoading, setRatingsLoading] = useState(false);
+  const [acquittals, setAcquittals] = useState([]);
+  const [acquittalsLoading, setAcquittalsLoading] = useState(false);
+  const [reviewAcquittal, setReviewAcquittal] = useState(null);
+  const [acquittalResponse, setAcquittalResponse] = useState('');
   const backfillAttempted = useRef(new Set());
 
   const loadRequests = useCallback(async () => {
@@ -83,9 +88,25 @@ export default function StakeholderDashboard() {
     }
   }, [stakeholderType]);
 
+  const loadAcquittals = useCallback(async () => {
+    setAcquittalsLoading(true);
+    try {
+      const data = await firestoreService.getAcquittalsForStakeholder(stakeholderType);
+      setAcquittals(
+        data.sort((a, b) => new Date(b.submittedAt ?? b.createdAt ?? 0) - new Date(a.submittedAt ?? a.createdAt ?? 0)),
+      );
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Failed to load acquittals.');
+    } finally {
+      setAcquittalsLoading(false);
+    }
+  }, [stakeholderType]);
+
   useEffect(() => {
     loadRequests();
-  }, [loadRequests]);
+    loadAcquittals();
+  }, [loadRequests, loadAcquittals]);
 
   const loadRatings = useCallback(async () => {
     setRatingsLoading(true);
@@ -106,6 +127,21 @@ export default function StakeholderDashboard() {
       loadRatings();
     }
   }, [activeTab, loadRatings]);
+
+  useEffect(() => {
+    if (activeTab === 'acquittals') {
+      loadAcquittals();
+    }
+  }, [activeTab, loadAcquittals]);
+
+  const pendingAcquittals = useMemo(
+    () => acquittals.filter((a) => ['Submitted to Stakeholder', 'Submitted'].includes(a.status)),
+    [acquittals],
+  );
+  const acknowledgedAcquittals = useMemo(
+    () => acquittals.filter((a) => ['Acknowledged', 'Approved'].includes(a.status)),
+    [acquittals],
+  );
 
   async function deliverFundingNotifications(request) {
     const amount = Number(request.amountApproved ?? 0);
@@ -355,13 +391,156 @@ export default function StakeholderDashboard() {
     }
   }
 
+  function closeAcquittalReview() {
+    setReviewAcquittal(null);
+    setAcquittalResponse('');
+  }
+
+  async function notifyAcquittalDecision(acquittal, status, message) {
+    const notifyIds = new Set();
+    if (acquittal.submittedBy) notifyIds.add(acquittal.submittedBy);
+    if (acquittal.councillorId) notifyIds.add(acquittal.councillorId);
+    const wdcMembers = await firestoreService.findWdcMembers(acquittal.wardId);
+    wdcMembers.forEach((w) => notifyIds.add(w.uid ?? w.id));
+    const mayor = await firestoreService.findMayor();
+    if (mayor?.uid) notifyIds.add(mayor.uid);
+
+    await Promise.all(
+      Array.from(notifyIds).filter(Boolean).map((userId) =>
+        firestoreService.createNotification({
+          userId,
+          type: 'acquittal_update',
+          title: status === 'Acknowledged' ? 'Acquittal Acknowledged' : 'Acquittal Returned',
+          message,
+          wardId: acquittal.wardId,
+          projectId: acquittal.projectId,
+          acquittalId: acquittal.id,
+        }).catch(() => null),
+      ),
+    );
+  }
+
+  async function handleAcquittalDecision(acknowledge) {
+    if (!reviewAcquittal) return;
+    if (!acknowledge && !acquittalResponse.trim()) {
+      setError('Provide a reason when returning an acquittal to the WDC.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const status = acknowledge ? 'Acknowledged' : 'Returned';
+      const responseText = acquittalResponse.trim() || (acknowledge ? 'Funds use verified and acquittal accepted.' : '');
+      await firestoreService.updateAcquittal(reviewAcquittal.id, {
+        status,
+        stakeholderId: user?.uid ?? user?.id,
+        stakeholderResponse: responseText,
+        stakeholderReviewedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      if (acknowledge && reviewAcquittal.projectId) {
+        await firestoreService.updateProject(reviewAcquittal.projectId, { status: 'Completed' });
+      }
+
+      await notifyAcquittalDecision(
+        reviewAcquittal,
+        status,
+        `${getStakeholderLabel(stakeholderType)} ${acknowledge ? 'acknowledged' : 'returned'} the acquittal for ${reviewAcquittal.projectName}.${responseText ? ` ${responseText}` : ''}`,
+      );
+
+      setSuccessMessage(acknowledge ? 'Acquittal acknowledged.' : 'Acquittal returned to WDC for correction.');
+      closeAcquittalReview();
+      await loadAcquittals();
+    } catch (err) {
+      setError(err.message || 'Failed to update acquittal.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function downloadAcquittalPdf(item) {
+    await downloadDocumentAsPdf({
+      content: item.documentContent ?? '',
+      signatureDataUrl: item.signatureDataUrl,
+      fileName: `acquittal-${String(item.projectName ?? 'report').replace(/\s+/g, '-').slice(0, 40)}.pdf`,
+      title: 'Ward Development Committee — Acquittal Report',
+    });
+  }
+
+  function renderAcquittals() {
+    return (
+      <div className="space-y-6">
+        <section className="cyber-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-cyber-text">Acquittal Reports from WDC</h2>
+              <p className="text-sm text-cyber-muted mt-1">
+                Signed financial acquittals for projects funded by {getStakeholderLabel(stakeholderType)}
+              </p>
+            </div>
+            <DataSourceIndicator source="firestore" />
+          </div>
+
+          {acquittalsLoading ? (
+            <p className="text-cyber-muted text-sm animate-pulse">Loading acquittals…</p>
+          ) : pendingAcquittals.length === 0 && acknowledgedAcquittals.length === 0 ? (
+            <p className="text-cyber-muted text-sm">No acquittal reports received yet.</p>
+          ) : (
+            <div className="space-y-6">
+              {pendingAcquittals.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-cyber-accent mb-3">Pending review ({pendingAcquittals.length})</h3>
+                  <div className="space-y-3">
+                    {pendingAcquittals.map((a) => (
+                      <div key={a.id} className="p-4 rounded-lg bg-slate-bg border border-slate-border flex flex-wrap justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-cyber-text">{a.projectName}</p>
+                          <p className="text-sm text-cyber-muted mt-1">
+                            {formatWardForDisplay(a.ward)} · Spent {formatCurrency(a.amountSpent)} / {formatCurrency(a.amountAllocated)}
+                          </p>
+                          <p className="text-xs text-cyber-muted mt-1">Submitted {formatDate(a.submittedAt ?? a.sentToStakeholderAt)}</p>
+                        </div>
+                        <button type="button" onClick={() => { setReviewAcquittal(a); setAcquittalResponse(''); }} className="cyber-btn-primary text-xs py-1.5 px-3">
+                          Review acquittal
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {acknowledgedAcquittals.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-status-completed mb-3">Acknowledged ({acknowledgedAcquittals.length})</h3>
+                  <div className="space-y-3">
+                    {acknowledgedAcquittals.map((a) => (
+                      <div key={a.id} className="p-4 rounded-lg bg-slate-bg border border-slate-border flex flex-wrap justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-cyber-text">{a.projectName}</p>
+                          <p className="text-sm text-cyber-muted">{formatWardForDisplay(a.ward)} · {formatCurrency(a.amountSpent)} spent</p>
+                        </div>
+                        <button type="button" onClick={() => setReviewAcquittal(a)} className="cyber-btn-secondary text-xs py-1.5 px-3">View</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   function renderOverview() {
     return (
       <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard label="Pending Requests" value={pendingRequests.length} icon="fa-clock" accent="text-status-pending" />
+          <StatCard label="Pending Acquittals" value={pendingAcquittals.length} icon="fa-file-invoice-dollar" accent="text-status-pending" />
           <StatCard label="Approved / Funded" value={approvedRequests.length} icon="fa-check-circle" accent="text-status-completed" />
-          <StatCard label="Total Funding" value={formatCurrency(totalFunding)} icon="fa-coins" accent="text-cyber-accent" />
         </div>
 
         <section className="cyber-card mt-6">
@@ -585,6 +764,7 @@ export default function StakeholderDashboard() {
 
       {activeTab === 'overview' && renderOverview()}
       {activeTab === 'funding-requests' && renderFundingRequests()}
+      {activeTab === 'acquittals' && renderAcquittals()}
       {activeTab === 'approved' && renderApproved()}
       {activeTab === 'profile' && <ProfilePage />}
 
@@ -737,6 +917,62 @@ export default function StakeholderDashboard() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={!!reviewAcquittal} onClose={closeAcquittalReview} title="Review Acquittal Report" wide>
+        {reviewAcquittal && (
+          <div className="space-y-4 max-h-[75vh] overflow-y-auto">
+            <div>
+              <p className="font-medium text-cyber-text text-lg">{reviewAcquittal.projectName}</p>
+              <p className="text-sm text-cyber-muted mt-1">
+                {formatWardForDisplay(reviewAcquittal.ward)} · {getFundingSourceLabel(reviewAcquittal.fundingSource)}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div><span className="text-cyber-muted">Allocated</span><p className="font-medium">{formatCurrency(reviewAcquittal.amountAllocated)}</p></div>
+              <div><span className="text-cyber-muted">Spent</span><p className="font-medium">{formatCurrency(reviewAcquittal.amountSpent)}</p></div>
+              <div><span className="text-cyber-muted">Balance</span><p className="font-medium">{formatCurrency(reviewAcquittal.balance ?? (Number(reviewAcquittal.amountAllocated) - Number(reviewAcquittal.amountSpent)))}</p></div>
+            </div>
+            {reviewAcquittal.documentContent && (
+              <pre className="whitespace-pre-wrap text-xs bg-slate-bg p-4 rounded-lg border border-slate-border font-mono max-h-64 overflow-y-auto">{reviewAcquittal.documentContent}</pre>
+            )}
+            {reviewAcquittal.signatureDataUrl && (
+              <div>
+                <p className="text-xs text-cyber-muted mb-1">WDC signature on file</p>
+                <img src={reviewAcquittal.signatureDataUrl} alt="WDC signature" className="h-16 bg-white rounded border border-slate-border p-1" />
+              </div>
+            )}
+            {reviewAcquittal.photos?.[0]?.url && (
+              <img src={reviewAcquittal.photos[0].url} alt="Evidence" className="max-h-48 rounded-lg border border-slate-border" />
+            )}
+            {['Submitted to Stakeholder', 'Submitted'].includes(reviewAcquittal.status) ? (
+              <>
+                <textarea
+                  className="cyber-input min-h-[80px] w-full"
+                  value={acquittalResponse}
+                  onChange={(e) => setAcquittalResponse(e.target.value)}
+                  placeholder="Response to WDC (optional for acknowledgement, required if returning)"
+                />
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" disabled={saving} onClick={() => handleAcquittalDecision(true)} className="cyber-btn-success flex-1 min-w-[140px]">
+                    Acknowledge receipt
+                  </button>
+                  <button type="button" disabled={saving} onClick={() => handleAcquittalDecision(false)} className="cyber-btn-danger flex-1 min-w-[140px]">
+                    Return to WDC
+                  </button>
+                  <button type="button" onClick={() => downloadAcquittalPdf(reviewAcquittal)} className="cyber-btn-secondary">Download PDF</button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                {reviewAcquittal.stakeholderResponse && (
+                  <p className="text-sm text-cyber-muted">Your response: {reviewAcquittal.stakeholderResponse}</p>
+                )}
+                <button type="button" onClick={() => downloadAcquittalPdf(reviewAcquittal)} className="cyber-btn-secondary text-sm">Download PDF</button>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

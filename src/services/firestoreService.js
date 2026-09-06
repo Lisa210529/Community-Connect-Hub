@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { normalizeRole } from '../constants/roleMapping';
+import { fundingSourceToStakeholderType } from '../constants/acquittals';
 import { matchesWard } from '../utils/wdcHelpers';
 import {
   getCollection as getLocalCollection,
@@ -302,6 +303,24 @@ export const firestoreService = {
 
   async getAcquittals(wardId) {
     return queryCollection(COLLECTIONS.ACQUITTALS, wardId);
+  },
+
+  async getAcquittalsForStakeholder(stakeholderType) {
+    const all = await queryCollection(COLLECTIONS.ACQUITTALS);
+    const type = String(stakeholderType ?? '').toLowerCase();
+    return all.filter((a) => fundingSourceToStakeholderType(a.fundingSource) === type);
+  },
+
+  async findStakeholdersByFundingSource(fundingSource) {
+    const typeMap = {
+      PSIP: 'psip',
+      DSIP: 'dsip',
+      DDA: 'dda',
+      NGO: 'ngo',
+    };
+    const role = typeMap[String(fundingSource ?? '').trim().toUpperCase()];
+    if (!role) return [];
+    return firestoreService.findUsersByRole(role);
   },
 
   async createAcquittal(data, docId) {

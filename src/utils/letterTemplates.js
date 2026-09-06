@@ -257,3 +257,99 @@ export function buildLetterContent({
     date,
   });
 }
+
+function formatCurrencyK(amount) {
+  const value = Number(amount ?? 0);
+  return `K ${value.toLocaleString('en-PG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function formatExpenditureLines(items = []) {
+  const rows = items.filter((e) => e.category || e.amount);
+  if (rows.length === 0) {
+    return '  (List expenditure categories and amounts in the table below.)\n\n  Category: _______________   Amount (K): _______________\n  Category: _______________   Amount (K): _______________';
+  }
+  return rows
+    .map((e, i) => {
+      const desc = e.description ? ` — ${e.description}` : '';
+      return `  ${i + 1}. ${e.category || 'Item'}${desc}: ${formatCurrencyK(e.amount)}`;
+    })
+    .join('\n');
+}
+
+/**
+ * Official WDC acquittal report for submission to a funding stakeholder (DDA, PSIP, DSIP, NGO).
+ */
+export function buildAcquittalReport({
+  projectName = '',
+  projectNumber = '',
+  ward = '',
+  wardNumber = '',
+  fundingSource = 'DDA',
+  amountAllocated = 0,
+  amountSpent = 0,
+  balance = 0,
+  periodCovered = '',
+  contractorName = '',
+  contractorContact = '',
+  expenditureBreakdown = [],
+  comments = '',
+  preparerName = '',
+  preparerPosition = 'WDC Treasurer',
+  chairmanName = '',
+  date = new Date(),
+} = {}) {
+  const wardTitle = formatCouncillorWardTitle(ward, wardNumber);
+  const officialDate = formatOfficialDate(date);
+  const fundingLabel = String(fundingSource).trim().toUpperCase() || 'DDA';
+  const resolvedBalance = balance ?? (Number(amountAllocated) - Number(amountSpent));
+
+  return `${MULLG_CONTACT}
+
+WARD DEVELOPMENT COMMITTEE — ACQUITTAL REPORT
+Submitted to: ${fundingLabel} (Funding Stakeholder)
+Ward: ${wardTitle}
+Madang Urban LLG, Madang Province
+Date: ${officialDate}
+
+PROJECT DETAILS
+Project Name: ${projectName || '________________'}
+Project Number / Reference: ${projectNumber || '________________'}
+Period Covered: ${periodCovered || '________________'}
+Funding Source: ${fundingLabel}
+
+FINANCIAL SUMMARY
+Amount Allocated:     ${formatCurrencyK(amountAllocated)}
+Amount Spent:         ${formatCurrencyK(amountSpent)}
+Balance / Variance:   ${formatCurrencyK(resolvedBalance)}
+
+EXPENDITURE BREAKDOWN
+${formatExpenditureLines(expenditureBreakdown)}
+
+CONTRACTOR / SUPPLIER
+Name: ${contractorName || '________________'}
+Contact: ${contractorContact || '________________'}
+
+COMMENTS / NOTES
+${comments?.trim() || '(Add any notes on delivery, receipts held, or variance explanation.)'}
+
+CERTIFICATION
+We certify that the funds received from ${fundingLabel} for the above project were applied
+in accordance with the approved proposal and that supporting receipts are held by the
+Ward Development Committee.
+
+Prepared by (Treasurer / WDC Member compiling acquittal):
+Name: ${preparerName || '________________'}
+Position: ${preparerPosition}
+Ward: ${wardTitle}
+
+Signature:
+
+Approved by (Chairman — Ward Councillor):
+Name: ${chairmanName || '________________'}
+Position: WDC Chairman (Ward Councillor)
+Ward: ${wardTitle}
+
+Signature:
+
+Note: Both WDC signatures are required before this acquittal is submitted to the funding stakeholder.`;
+}
